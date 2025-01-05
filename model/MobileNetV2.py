@@ -209,10 +209,16 @@ class MobileNetV2(nn.Module):
                 x = x[..., ::2, ::2]
 
 
+            if layers is None:
+                continue
+
             if idx not in layers:
                 continue
             # print(" - index , " , idx , " " , x.shape)
             layers_output.append(x)
+        
+        if layers is None:
+            return x, feat_2x, feat_4x
 
         return x, feat_2x, feat_4x, layers_output
 

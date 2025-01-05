@@ -1,6 +1,5 @@
 
 import os
-os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'  # Add this line at the very top
 
 import cv2
 import numpy as np
@@ -28,6 +27,11 @@ elif torch.backends.mps.is_available():
     print("Warning: Using MPS with CPU fallback for unsupported operations")
 else:
     DEFAULT_DEVICE = torch.device("cpu")
+
+DEFAULT_DEVICE = torch.device("cpu")
+
+
+print(DEFAULT_DEVICE)
 
 def load_model(args, weights_path):
     if args.model == "unirare":
@@ -119,15 +123,14 @@ def run_dataset(dataset, model, model_name):
         # run model 
         start_time_model = time.time()
         sal = run_model(model, img, model_name)
-        # print(sal.shape)
 
         # resize sal
-        sal = cv2.resize(sal, (img.shape[-2], img.shape[-1]))
+        sal = cv2.resize(sal, (targ.shape[-2], targ.shape[-1]))
 
-        # compute metrics 
+        # # compute metrics 
         msr = metrics.compute_msr(sal, targ.squeeze(0).numpy(), dist.squeeze(0).numpy())
-        
-        # Add time process for each image
+
+        # # Add time process for each image
         msr['process_time'] = time.time() - start_time_model
         results.append(msr)
 
@@ -159,9 +162,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--input_size", 
+        type=int, 
+        default=412, 
+    )
+
+    parser.add_argument(
         "--model", 
         type=str, 
-        default="unirare", 
+        default="unisal", 
         choices=["unirare", "unirare_finetuned", "unisal", "deep_rare"],
         help="Select model to use"
     )
@@ -169,14 +178,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--P3Dataset", 
         type=str, 
-        default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
+        # default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
+        default="C:/Users/lelon/Documents/Dataset/P3_data/", 
+
         help="path model to load"
     )
 
     parser.add_argument(
         "--O3Dataset", 
         type=str, 
-        default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
+        # default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
+        default="C:/Users/lelon/Documents/Dataset/O3_data/", 
+
         help="path model to load"
     )
 
@@ -220,18 +233,25 @@ if __name__ == "__main__":
     # load dataloaders
     o3_dataset = O3Dataset(
         path =args.O3Dataset,
+        input_size=(args.input_size,args.input_size)
+
     )
 
     p3_dataset_sizes = P3Dataset(
         path =args.P3Dataset + "sizes/",
+        input_size=(args.input_size,args.input_size)
     )
 
     p3_dataset_orientations = P3Dataset(
         path =args.P3Dataset + "orientations/",
+        input_size=(args.input_size,args.input_size)
+
     )
 
     p3_dataset_colors = P3Dataset(
         path =args.P3Dataset + "colors/",
+        input_size=(args.input_size,args.input_size)
+
     )
 
     # Run dataset and collect results

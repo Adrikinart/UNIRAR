@@ -26,7 +26,7 @@ class FeatureExtractor(nn.Module):
                 features.append(x)
         return features
 
-
+import time
 class DeepRare(nn.Module):
     def __init__(
             self,
@@ -65,10 +65,10 @@ class DeepRare(nn.Module):
                 torch.Tensor: Fused saliency map.
                 torch.Tensor: Stacked feature maps.
             """
+
             layer_output = self.feature_extractor(input_image)
-
-            return self.rarity(layer_output)
-
+            dd= self.rarity(layer_output)
+            return dd
 
 class RarityNetwork(nn.Module):
     """
@@ -238,5 +238,4 @@ class RarityNetwork(nn.Module):
                 for features in pack
             ]
             groups[:, :, i] = self.normalize_tensor(self.fuse_itti(processed_layers), min_val=0, max_val=256)
-
         return groups.sum(dim=-1), groups

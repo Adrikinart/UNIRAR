@@ -515,7 +515,7 @@ class UNISAL(BaseModel):
         feat_seq_4x = []
 
         for t, img in enumerate(torch.unbind(x, dim=1)):
-            im_feat_1x, im_feat_2x, im_feat_4x, _ = self.cnn(img)
+            im_feat_1x, im_feat_2x, im_feat_4x = self.cnn(img, layers = None)
 
             im_feat_2x = self.skip_2x(im_feat_2x)
             im_feat_4x = self.skip_4x(im_feat_4x)

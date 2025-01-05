@@ -522,7 +522,7 @@ class UNIRARE(BaseModel):
         sal_rare = []
         level_rare= []
         for t, img in enumerate(torch.unbind(x, dim=1)):
-            im_feat_1x, im_feat_2x, im_feat_4x, layers = self.cnn(img,self.layers)
+            im_feat_1x, im_feat_2x, im_feat_4x, layers = self.cnn(img,layers= self.layers)
 
             SAL, groups = self.deeprare(layers)
 
