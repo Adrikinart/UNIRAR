@@ -46,6 +46,13 @@ class O3Dataset(Dataset):
             csvreader = csv.reader(csvfile)
             # self.data_csv['fields'] = next(csvreader)
             for row in csvreader:
+                if os.path.isfile(self.dist_dir / row[0]) == False:
+                    continue
+                if os.path.isfile(self.img_dir / row[0]) == False:
+                    continue
+                if os.path.isfile(self.target_dir / row[0]) == False:
+                    continue
+
                 self.data.append(row)
             print("Total no. of rows: %d" % (csvreader.line_num))
 
@@ -83,13 +90,9 @@ class O3Dataset(Dataset):
                 ))
         # else:
             # transformations.append(transforms.Lambda(normalize_tensor))
-
-            
         return transforms.Compose(transformations)(img)
 
     def get_data(self, img_idx):
-
-        print(img_idx)
 
         img = self.preprocess(self.get_img(img_idx), out_size=self.img_size)
         targ = self.preprocess(self.get_target(img_idx), out_size=self.target_size, data='sal')

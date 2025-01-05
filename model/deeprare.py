@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import torchvision.models as models
 
-class FeatureExtractor(torch.nn.Module):
+class FeatureExtractor(nn.Module):
     def __init__(self, model, layer_indices):
         """
         Initialize the feature extractor.
@@ -54,21 +54,20 @@ class DeepRare(nn.Module):
 
         self.rarity = RarityNetwork()
         
-def forward(self, input_image):
-        """
-        Forward pass to process feature maps.
+    def forward(self, input_image):
+            """
+            Forward pass to process feature maps.
 
-        Args:
-            input_image (torch.Tensor): Input image tensor.
+            Args:
+                input_image (torch.Tensor): Input image tensor.
 
-        Returns:
-            torch.Tensor: Fused saliency map.
-            torch.Tensor: Stacked feature maps.
-        """
-        layer_output = self.feature_extractor(input_image)
+            Returns:
+                torch.Tensor: Fused saliency map.
+                torch.Tensor: Stacked feature maps.
+            """
+            layer_output = self.feature_extractor(input_image)
 
-        return self.rarity(layer_output)
-
+            return self.rarity(layer_output)
 
 
 class RarityNetwork(nn.Module):

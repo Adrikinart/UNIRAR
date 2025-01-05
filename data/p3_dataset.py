@@ -43,18 +43,27 @@ class P3Dataset(Dataset):
             for i, line in enumerate(f):
                 if i == 0:
                     continue
-                self.data.append(line.split(",")[1:])
+                
+                file_name = line.split(",")[1]
+                if os.path.isfile(self.dist_dir / file_name) == False:
+                    continue
+                if os.path.isfile(self.img_dir / file_name) == False:
+                    continue
+                if os.path.isfile(self.target_dir / file_name) == False:
+                    continue
+
+                self.data.append(file_name)
 
     def get_dist(self, img_idx):
-        map_file = self.dist_dir / self.data[img_idx][0]
+        map_file = self.dist_dir / self.data[img_idx]
         return cv2.imread(str(map_file), cv2.IMREAD_GRAYSCALE)
 
     def get_img(self, img_idx):
-        img_file = self.img_dir / self.data[img_idx][0]
+        img_file = self.img_dir / self.data[img_idx]
         return np.ascontiguousarray(cv2.imread(str(img_file))[:, :, ::-1])
 
     def get_target(self, img_idx):
-        fix_map_file = self.target_dir / self.data[img_idx][0]
+        fix_map_file = self.target_dir / self.data[img_idx]
         return cv2.imread(str(fix_map_file), cv2.IMREAD_GRAYSCALE)
 
     @property

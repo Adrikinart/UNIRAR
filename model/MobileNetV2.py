@@ -197,7 +197,7 @@ class MobileNetV2(nn.Module):
 
         feat_2x, feat_4x, feat_8x = None, None, None
         layers_output = []
-        print("MobileNet Rare features")
+        # print("MobileNet Rare features")
         for idx, module in enumerate(self.features._modules.values()):
 
             x = module(x)
@@ -211,7 +211,7 @@ class MobileNetV2(nn.Module):
 
             if idx not in layers:
                 continue
-            print(" - index , " , idx , " " , x.shape)
+            # print(" - index , " , idx , " " , x.shape)
             layers_output.append(x)
 
         return x, feat_2x, feat_4x, layers_output

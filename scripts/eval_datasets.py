@@ -1,5 +1,7 @@
 
 import os
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'  # Add this line at the very top
+
 import cv2
 import numpy as np
 import argparse
@@ -9,54 +11,56 @@ import torch
 import torchvision.models as models
 import torchvision.transforms as transforms
 
+
 import sys 
 sys.path.append('..')
 from model import DeepRare, UNIRARE, UNISAL
 from data import FileOpener, O3Dataset, P3Dataset
 from utils import metrics
-
-def normalize_tensor(tensor, rescale=False):
-    tmin = torch.min(tensor)
-    if rescale or tmin < 0:
-        tensor -= tmin
-    tsum = tensor.sum()
-    if tsum > 0:
-        return tensor / tsum
-    tensor.fill_(1. / tensor.numel())
-    return tensor
+import json
+import time
 
 
-def load_model(model_name, weights_path):
-    if model_name == "unirare":
+if torch.cuda.is_available():
+    DEFAULT_DEVICE = torch.device("cuda:0")
+elif torch.backends.mps.is_available():
+    DEFAULT_DEVICE = torch.device("cpu")
+    print("Warning: Using MPS with CPU fallback for unsupported operations")
+else:
+    DEFAULT_DEVICE = torch.device("cpu")
+
+def load_model(args, weights_path):
+    if args.model == "unirare":
         model = UNIRARE(bypass_rnn=False)
-    elif model_name == "unirare_finetuned":
+    elif args.model == "unirare_finetuned":
         model = UNIRARE(bypass_rnn=False)
         if os.path.exists(weights_path + "weights_best.pth"):
             model.load_weights(weights_path + "weights_best.pth")
-    elif model_name == "unisal":
+    elif args.model == "unisal":
         model = UNISAL(bypass_rnn=False)
-    elif model_name == "deep_rare":
+    elif args.model == "deep_rare":
+        print("DEEP RARE")
         model = DeepRare(
-            # threshold=args.threshold,
+            threshold=args.threshold,
             # model_name=args.model_name,
-            # pretrained=True,
-            # layers=args.layers_to_extract
+            pretrained=args.pretrained,
+            layers=args.layers_to_extract
         )
     else:
-        raise ValueError(f"Unknown model name: {model_name}")
+        raise ValueError(f"Unknown model name: {args.model}")
+    
+    model= model.to(DEFAULT_DEVICE)
     return model
 
-
 def post_process(map, img):
-    print(img.shape)
     smap = np.exp(map)
     smap = np.squeeze(smap)
     smap = smap
     map_ = (smap / np.amax(smap) * 255).astype(np.uint8)
     return cv2.resize(map_ , (img.shape[-2] , img.shape[-1]))
 
-
-def run_model(model, tensor_image, model_name):
+def run_model(model, image, model_name):
+    tensor_image = image.to(DEFAULT_DEVICE)
 
     if model_name == "unirare" or model_name == "unirare_finetuned":
         tensor_image = tensor_image.unsqueeze(0).unsqueeze(0)
@@ -75,6 +79,7 @@ def run_model(model, tensor_image, model_name):
 
         SAL = SAL - SAL.min()
         SAL = SAL / SAL.max()
+        SAL = SAL.detach().cpu()
 
         return SAL.numpy() * 255
     
@@ -83,7 +88,7 @@ def run_model(model, tensor_image, model_name):
 
         map_ = model(tensor_image, source="SALICON")
         map_ = map_.squeeze(0).squeeze(0).squeeze(0).detach().cpu().numpy()
-        map_ = post_process(map_, img)
+        map_ = post_process(map_, tensor_image)
 
         return map_
     
@@ -101,6 +106,46 @@ def parse_list_of_ints(value: str):
         return [int(x) for x in value.split(",")]
     except ValueError:
         raise argparse.ArgumentTypeError(f"'{value}' n'est pas une liste d'entiers valide. Format attendu: '1,2,3'")
+    
+
+def run_dataset(dataset, model, model_name):
+    results = []
+    total = len(dataset)-1
+    start_time = time.time()
+    
+    for i in range(total):
+        img, targ, dist, _ = dataset[i]
+
+        # run model 
+        start_time_model = time.time()
+        sal = run_model(model, img, model_name)
+        # print(sal.shape)
+
+        # resize sal
+        sal = cv2.resize(sal, (img.shape[-2], img.shape[-1]))
+
+        # compute metrics 
+        msr = metrics.compute_msr(sal, targ.squeeze(0).numpy(), dist.squeeze(0).numpy())
+        
+        # Add time process for each image
+        msr['process_time'] = time.time() - start_time_model
+        results.append(msr)
+
+        process_time = time.time() - start_time
+        # Print loading bar with FPS information
+        progress = (i + 1) / total
+        bar_length = 40
+        block = int(round(bar_length * progress))
+        fps = (i + 1) / process_time
+        text = f"\rProgress: [{'#' * block + '-' * (bar_length - block)}] {progress * 100:.2f}% | FPS: {fps:.2f} | {i}/{total}"
+        sys.stdout.write(text)
+        sys.stdout.flush()
+
+        if i == 30 :
+            break
+
+    print()  # New line after progress bar is complete
+    return results
 
 
 if __name__ == "__main__":
@@ -116,7 +161,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model", 
         type=str, 
-        default="deep_rare", 
+        default="unirare", 
         choices=["unirare", "unirare_finetuned", "unisal", "deep_rare"],
         help="Select model to use"
     )
@@ -145,7 +190,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--layers_to_extract", 
         type=parse_list_of_ints, 
-        default="1,2,  4,5,8,  9,11,12,13,  16,17,18,19,  26,27,28,29", 
+        # default="1,2,  4,5,8,  9,11,12,13,  16,17,18,19,  26,27,28,29", 
+        default="6,7, 12,13,14,  16,17,18", 
         help="Liste d'entiers séparés par des virgules (ex: 1,2,3)."
     )
 
@@ -156,13 +202,20 @@ if __name__ == "__main__":
         help="Threshold for torch rare 2021"
     )
 
+    parser.add_argument(
+        "--pretrained", 
+        type=bool, 
+        default=True, 
+        help="True or False pretrained model"
+    )
+
     args = parser.parse_args()
 
     # data results
     results = {}
 
     # Laod model
-    model = load_model(args.model,"../model/weights/")
+    model = load_model(args,"../model/weights/")
 
     # load dataloaders
     o3_dataset = O3Dataset(
@@ -181,53 +234,16 @@ if __name__ == "__main__":
         path =args.P3Dataset + "colors/",
     )
 
-    print(len(o3_dataset))
+    # Run dataset and collect results
+    results['O3Dataset'] = run_dataset(o3_dataset, model, args.model)
+    results['P3Dataset_sizes'] = run_dataset(p3_dataset_sizes, model, args.model)
+    results['P3Dataset_orientations'] = run_dataset(p3_dataset_orientations, model, args.model)
+    results['P3Dataset_colors'] = run_dataset(p3_dataset_colors, model, args.model)
 
-    # parcours de chaque dataset O3
-    for i in range(0 , len(p3_dataset_colors)):
-        img, targ, dist, _ = p3_dataset_colors[i]
+    # Save results to JSON file
+    results['args'] = vars(args)
 
-        # run model 
-        sal = run_model(model, img, args.model)
-        print(sal.shape)
-
-        # resize sal
-        sal = cv2.resize(sal, (img.shape[-2], img.shape[-1]))
-
-        # show shape
-        print(sal.shape)
-        print(targ.shape)
-        print(dist.shape)
-
-        # show image
-        plt.figure()
-        plt.subplot(141)
-        plt.imshow(np.transpose(img, (1, 2, 0)))
-
-        plt.subplot(142)
-        plt.imshow(sal)
-
-        plt.subplot(143)
-        plt.imshow(np.transpose(targ, (1, 2, 0)))
-
-        plt.subplot(144)
-        plt.imshow(np.transpose(dist, (1, 2, 0)))
-
-        plt.show()
-
-        # show max and min
-        print("sal : " , np.amax(sal) )
-        print("targ : " , np.amax(targ.numpy()) )
-        print("dist : " , np.amax(dist.numpy()) )
-
-        print("sal : " , np.amin(sal) )
-        print("targ : " , np.amin(targ.numpy()) )
-        print("dist : " , np.amin(dist.numpy()) )
-
-        # compute metrics 
-        msr = metrics.compute_msr(sal, targ.squeeze(0).numpy(), dist.squeeze(0).numpy())
-        print(msr)
-
-
-        break
-
+    # Create a name based on args information
+    result_filename = f"results_{args.model}_{args.type}.json"
+    with open("../res/" + result_filename, 'w') as f:
+        json.dump(results, f, indent=4)

@@ -524,11 +524,7 @@ class UNIRARE(BaseModel):
         for t, img in enumerate(torch.unbind(x, dim=1)):
             im_feat_1x, im_feat_2x, im_feat_4x, layers = self.cnn(img,self.layers)
 
-            print("LAYERS ")
-
             SAL, groups = self.deeprare(layers)
-
-            print("DEEPRARE")
 
             im_feat_2x = self.skip_2x(im_feat_2x)
             im_feat_4x = self.skip_4x(im_feat_4x)
@@ -549,14 +545,11 @@ class UNIRARE(BaseModel):
         level_rare = torch.stack(level_rare)
 
         feat_seq_1x = torch.stack(feat_seq_1x, dim=1)
-
-        print("RNN")
         # Bypass-RNN
         hidden, rnn_feat_seq, rnn_feat = (None,) * 3
         if not (static and self.bypass_rnn):
             rnn_feat_seq, hidden = self.rnn(feat_seq_1x, hidden=h0)
 
-        print("DECODER")
         # Decoder
         output_seq = []
         for idx, im_feat in enumerate(torch.unbind(feat_seq_1x, dim=1)):

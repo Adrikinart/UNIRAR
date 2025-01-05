@@ -149,7 +149,7 @@ def compute_msr(salmap, targmap, distmap):
 
     msrt = MSR_targ(salmap,targmap,distmap)
     msrb = MSR_bg(salmap,targmap,distmap)
-    return (msrt, msrb)
+    return {'msrt':msrt, 'msrb':msrb}
 
 
 def MSR_targ(salmap, targmap, distmap, dilate=0, add_eps=False):
@@ -186,7 +186,7 @@ def MSR_targ(salmap, targmap, distmap, dilate=0, add_eps=False):
     else:
         score = -1
 
-    return score
+    return float( score )
 
 
 def MSR_bg(salmap, targmap, distmap, dilate=0, add_eps=False):
@@ -225,4 +225,4 @@ def MSR_bg(salmap, targmap, distmap, dilate=0, add_eps=False):
     else:
         score = -1
 
-    return score
+    return float( score )
