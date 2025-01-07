@@ -23,15 +23,11 @@ import time
 if torch.cuda.is_available():
     DEFAULT_DEVICE = torch.device("cuda:0")
 elif torch.backends.mps.is_available():
-    DEFAULT_DEVICE = torch.device("cpu")
-    print("Warning: Using MPS with CPU fallback for unsupported operations")
+    DEFAULT_DEVICE = torch.device("mps")
 else:
     DEFAULT_DEVICE = torch.device("cpu")
 
-DEFAULT_DEVICE = torch.device("cpu")
-
-
-print(DEFAULT_DEVICE)
+print("DEFAULT_DEVICE " ,DEFAULT_DEVICE)
 
 def load_model(args, weights_path):
     if args.model == "unirare":
@@ -144,8 +140,7 @@ def run_dataset(dataset, model, model_name):
         sys.stdout.write(text)
         sys.stdout.flush()
 
-        if i == 30 :
-            break
+        # break
 
     print()  # New line after progress bar is complete
     return results
@@ -170,7 +165,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model", 
         type=str, 
-        default="unisal", 
+        default="unirare", 
         choices=["unirare", "unirare_finetuned", "unisal", "deep_rare"],
         help="Select model to use"
     )
@@ -178,8 +173,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--P3Dataset", 
         type=str, 
-        # default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
-        default="C:/Users/lelon/Documents/Dataset/P3_data/", 
+        default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
+        # default="C:/Users/lelon/Documents/Dataset/P3_data/", 
 
         help="path model to load"
     )
@@ -187,8 +182,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--O3Dataset", 
         type=str, 
-        # default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
-        default="C:/Users/lelon/Documents/Dataset/O3_data/", 
+        default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
+        # default="C:/Users/lelon/Documents/Dataset/O3_data/", 
 
         help="path model to load"
     )
@@ -203,8 +198,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--layers_to_extract", 
         type=parse_list_of_ints, 
-        # default="1,2,  4,5,8,  9,11,12,13,  16,17,18,19,  26,27,28,29", 
-        default="6,7, 12,13,14,  16,17,18", 
+        default="1,2,  4,5,8,  9,11,12,13,  16,17,18,19,  26,27,28,29", 
+        # default="6,7, 12,13,14,  16,17,18", 
         help="Liste d'entiers séparés par des virgules (ex: 1,2,3)."
     )
 
