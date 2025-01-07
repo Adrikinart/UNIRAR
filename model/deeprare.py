@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as T
 import torchvision.models as models
+import matplotlib.pyplot as plt
 
 class FeatureExtractor(nn.Module):
     def __init__(self, model, layer_indices):
@@ -65,11 +66,10 @@ class DeepRare(nn.Module):
                 torch.Tensor: Fused saliency map.
                 torch.Tensor: Stacked feature maps.
             """
+            target_size = input_image.shape[-2:]
 
             layer_output = self.feature_extractor(input_image)
-            dd= self.rarity(layer_output)
-            return dd
-
+            return self.rarity(layer_output, target_size)
 class RarityNetwork(nn.Module):
     """
     DeepRare2019 Class.
@@ -98,8 +98,17 @@ class RarityNetwork(nn.Module):
         Returns:
             torch.Tensor: Resized tensor.
         """
-        resize_transform = T.Resize(size, interpolation=T.InterpolationMode.BILINEAR)
-        return resize_transform(tensor.unsqueeze(0)).squeeze(0)
+
+        if tensor.dim() == 2:
+            tensor = tensor.unsqueeze(0).unsqueeze(0)  # Add batch dimension if missing
+        if tensor.dim() == 3:
+            tensor = tensor.unsqueeze(0)  # Add batch dimension if missing
+        elif tensor.dim() != 4:
+            raise ValueError("Input tensor must have 3 or 4 dimensions")
+        
+        tensor=  F.interpolate(tensor, size=size, mode="bilinear", align_corners=False).squeeze(0)
+
+        return tensor
 
     @staticmethod
     def normalize_tensor(tensor, min_val=0, max_val=1):
@@ -120,6 +129,7 @@ class RarityNetwork(nn.Module):
             return torch.zeros_like(tensor)
         return ((tensor - tensor_min) / (tensor_max - tensor_min)) * (max_val - min_val) + min_val
     
+    
     def map_ponderation(self, tensor):
         """
         Apply weighting to a tensor map based on its rarity.
@@ -134,6 +144,26 @@ class RarityNetwork(nn.Module):
         map_mean = tensor.mean()
         map_weight = (map_max - map_mean) ** 2
         return self.normalize_tensor(tensor, min_val=0, max_val=1) * map_weight
+    
+    def map_ponderation_tensor(self,tensor):
+        """
+        Apply weighting to a tensor map based on its rarity for each channel independently.
+
+        Args:
+            tensor (torch.Tensor): Input tensor of shape [C, W].
+
+        Returns:
+            torch.Tensor: Weighted tensor map of shape [C, W].
+        """
+        map_max = tensor.max(dim=1, keepdim=True)[0]
+        map_mean = tensor.mean(dim=1, keepdim=True)
+        map_weight = (map_max - map_mean) ** 2
+
+        tensor_min = tensor.min(dim=1, keepdim=True)[0]
+        tensor_max = tensor.max(dim=1, keepdim=True)[0]
+        normalized_tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
+
+        return normalized_tensor * map_weight
 
     def fuse_itti(self, maps):
         """
@@ -145,40 +175,88 @@ class RarityNetwork(nn.Module):
         Returns:
             torch.Tensor: Fused map.
         """
+
         fused_map = torch.zeros_like(maps[0])
         for feature_map in maps:
             fused_map += self.map_ponderation(feature_map)
         return fused_map
 
-    def rarity(self, channel, bins=6):
+
+    def rarity(self, feature_maps, bins=6):
         """
-        Compute the single-resolution rarity for a given channel.
+        Compute the single-resolution rarity for a given data.
 
         Args:
-            channel (torch.Tensor): Input channel.
+            data (torch.Tensor): Input data of shape [B, C, W, H].
             bins (int): Number of bins for histogram computation.
 
         Returns:
             torch.Tensor: Rarity map.
         """
-        a, b = channel.shape
 
-        # Apply border padding
-        channel[:1, :] = 0
-        channel[:, :1] = 0
-        channel[a - 1:, :] = 0
-        channel[:, b - 1:] = 0
+        B, C, W, H = feature_maps.shape
 
-        # Histogram computation
-        channel = self.normalize_tensor(channel, min_val=0, max_val=256)
-        hist = torch.histc(channel, bins=bins, min=0, max=256)
-        hist = hist / hist.sum()
-        hist = -torch.log(hist + 1e-4)
+        batchs= []
 
-        # Back-projection
-        hist_idx = ((channel * bins - 1).long().clamp(0, bins - 1))
-        dst = self.normalize_tensor(hist[hist_idx], min_val=0, max_val=1)
-        return self.map_ponderation(dst)
+        for bidx in range(B):
+
+            feature_maps_histo_batch = feature_maps[bidx, :, :, :]
+
+            feature_maps_histo_batch[:, :1, :] = 0
+            feature_maps_histo_batch[:, :, :1] = 0
+            feature_maps_histo_batch[:, W - 1:, :] = 0
+            feature_maps_histo_batch[:, :, H - 1:] = 0
+            feature_maps_histo_batch = feature_maps_histo_batch.view(C, -1)
+
+
+            tensor_min = feature_maps_histo_batch.min(dim=1, keepdim=True)[0]
+            tensor_max = feature_maps_histo_batch.max(dim=1, keepdim=True)[0]
+            feature_maps_histo_batch = (feature_maps_histo_batch - tensor_min) / (tensor_max - tensor_min + 1e-8)
+            feature_maps_histo_batch = feature_maps_histo_batch * 256
+
+
+            min_val, max_val = feature_maps_histo_batch.min(), feature_maps_histo_batch.max()
+            bin_edges = torch.linspace(min_val, max_val, steps=bins + 1, device=feature_maps_histo_batch.device)
+
+            bin_indices = torch.bucketize(feature_maps_histo_batch, bin_edges, right=True) - 1
+
+            bin_indices = bin_indices.clamp(0, bins - 1)
+
+            histograms = torch.zeros((feature_maps_histo_batch.size(0), bins), device=feature_maps_histo_batch.device)
+            histograms.scatter_add_(1, bin_indices, torch.ones_like(bin_indices, dtype=torch.float, device=feature_maps_histo_batch.device))    
+
+            histograms = histograms / histograms.sum(dim=1, keepdim=True)
+            histograms = -torch.log(histograms + 1e-4)
+            hists_idx = ((feature_maps_histo_batch * bins - 1).long().clamp(0, bins - 1))
+            channels = histograms.gather(1, hists_idx)
+
+            tensor_min = channels.min(dim=1, keepdim=True)[0]
+            tensor_max = channels.max(dim=1, keepdim=True)[0]
+            channels = (channels - tensor_min) / (tensor_max - tensor_min + 1e-8)
+
+            channels = self.map_ponderation_tensor(channels)
+
+            hists_idx = hists_idx.view(C, H, W)
+            channels = channels.view(C, H, W)
+
+            channels[:,:1, :] = 0
+            channels[:,:, :1] = 0
+            channels[:,-1:, :] = 0
+            channels[:,:, -1:] = 0
+        
+            channels = channels.view(C,-1)
+            channels = self.map_ponderation_tensor(channels)
+
+            channels= channels.sum(dim=0)
+
+            tensor_min = channels.min(dim=0, keepdim=True)[0]
+            tensor_max = channels.max(dim=0, keepdim=True)[0]
+            channels = (channels - tensor_min) / (tensor_max - tensor_min + 1e-8)
+            
+            batchs.append(channels.view(H, W))
+
+        return torch.stack(batchs, dim=0)
+    
 
     def apply_rarity(self, layer_output):
         """
@@ -191,25 +269,21 @@ class RarityNetwork(nn.Module):
         Returns:
             torch.Tensor: Processed feature map.
         """
-        feature_maps = layer_output.permute(0, 2, 3, 1)
-        _, _, _, num_maps = feature_maps.shape
+        processed_map = self.rarity(layer_output.clone())
 
-        processed_map = self.map_ponderation(self.rarity(feature_maps[0, :, :, 0]))
-
-        for i in range(1, num_maps):
-            feature = self.rarity(feature_maps[0, :, :, i])
-            feature[:1, :] = 0
-            feature[:, :1] = 0
-            feature[-1:, :] = 0
-            feature[:, -1:] = 0
-            processed_map += self.map_ponderation(feature)
-
-        processed_map = self.normalize_tensor(processed_map, min_val=0, max_val=1)
         if self.threshold is not None:
             processed_map[processed_map < self.threshold] = 0
+
+
+        # add fuse itti 
+
+        # normalize tensor
+
+        # add resize
+
         return processed_map
 
-    def forward(self, layer_output):
+    def forward(self, layer_output, target_size):
         """
         Forward pass to process feature maps.
 
@@ -222,7 +296,6 @@ class RarityNetwork(nn.Module):
         """
 
         packs = []
-
         for layer in layer_output:
             added = next((pack for pack in packs if pack[0].shape[-2:] == layer.shape[-2:]), None)
             if added:
@@ -230,12 +303,21 @@ class RarityNetwork(nn.Module):
             else:
                 packs.append([layer])
 
-        groups = torch.zeros((240, 240, len(packs)), device=layer_output[0].device)
+        fused_maps = [] 
+        for pack in packs:
 
-        for i, pack in enumerate(packs):
+            
+
             processed_layers = [
-                self.tensor_resize(self.apply_rarity(features))
-                for features in pack
+            self.tensor_resize(self.apply_rarity(features), target_size)
+            for features in pack
             ]
-            groups[:, :, i] = self.normalize_tensor(self.fuse_itti(processed_layers), min_val=0, max_val=256)
-        return groups.sum(dim=-1), groups
+
+            fused_map = self.normalize_tensor(self.fuse_itti(processed_layers), min_val=0, max_val=256)
+
+            fused_maps.append(fused_map)
+
+        fused_maps = torch.stack(fused_maps, dim=-1)
+        result = fused_maps.sum(dim=-1)
+
+        return result, fused_maps

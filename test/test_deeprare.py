@@ -12,6 +12,17 @@ import sys
 sys.path.append('..')
 from model import FeatureExtractor, DeepRare, UNIRARE
 
+
+if torch.cuda.is_available():
+    DEFAULT_DEVICE = torch.device("cuda:0")
+elif torch.backends.mps.is_available():
+    DEFAULT_DEVICE = torch.device("mps")
+else:
+    DEFAULT_DEVICE = torch.device("cpu")
+
+print("DEFAULT_DEVICE " ,DEFAULT_DEVICE)
+
+
 def load_model(model_name: str):
     """
     Charge un modèle CNN PyTorch.
@@ -107,6 +118,8 @@ if __name__ == "__main__":
     ) # instantiate class
     directory = r'inputs/images/'
 
+    rarity_network= rarity_network.to(DEFAULT_DEVICE)
+
     for filename in os.listdir(directory):
         print(filename)
         go_path = os.path.join(directory, filename)
@@ -118,8 +131,15 @@ if __name__ == "__main__":
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         orig_h, orig_w = img.shape[:2]
 
-        input_image = process_image(img)
+        input_image = process_image(img).to(DEFAULT_DEVICE)
         SAL, groups = rarity_network(input_image)
+
+
+        print(groups.shape)
+        print(SAL.shape)
+
+        groups = groups.squeeze(0).detach().cpu().numpy()
+        SAL = SAL.squeeze(0).detach().cpu().numpy()
 
         plt.figure(1)
 

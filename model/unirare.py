@@ -524,7 +524,13 @@ class UNIRARE(BaseModel):
         for t, img in enumerate(torch.unbind(x, dim=1)):
             im_feat_1x, im_feat_2x, im_feat_4x, layers = self.cnn(img,layers= self.layers)
 
-            SAL, groups = self.deeprare(layers)
+
+            
+            SAL, groups = self.deeprare(layers,target_size)
+
+            sal_rare.append(SAL)
+            level_rare.append(groups)
+
 
             im_feat_2x = self.skip_2x(im_feat_2x)
             im_feat_4x = self.skip_4x(im_feat_4x)
@@ -538,8 +544,6 @@ class UNIRARE(BaseModel):
             feat_seq_2x.append(im_feat_2x)
             feat_seq_4x.append(im_feat_4x)
 
-            sal_rare.append(SAL)
-            level_rare.append(groups)
 
         sal_rare = torch.stack(sal_rare)
         level_rare = torch.stack(level_rare)
