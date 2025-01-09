@@ -10,6 +10,7 @@ from .cgru import ConvGRU
 from .MobileNetV2 import MobileNetV2, InvertedResidual
 
 import warnings
+import time
 warnings.filterwarnings("ignore")
 
 # Set default backbone CNN kwargs
@@ -161,7 +162,18 @@ class RarityNetwork(nn.Module):
 
         return tensor.view(B,W,H)
     
-    def forward(self, layer_output):
+    def forward(
+            self,
+            layer_output,
+            layers=[
+                [1,2],
+                [4,5],
+                [7,8,9],
+                [11,12,13],
+                [15,16,17]
+            ]
+        ):
+        
         layer1 = self.apply_rarity(layer_output, 1)
         layer2 = self.apply_rarity(layer_output, 2)
         layer4 = self.apply_rarity(layer_output, 4)
@@ -179,9 +191,12 @@ class RarityNetwork(nn.Module):
         high_level = self.fuse_itti_tensor(torch.stack([layer16, layer17, layer15],dim=1))
         medium_level2 = self.fuse_itti_tensor(torch.stack([layer12, layer13, layer11], dim=1))
         medium_level1 = self.fuse_itti_tensor(torch.stack([layer8, layer9, layer7], dim=1))
+
         low_level2 = self.fuse_itti_tensor(torch.stack([layer4, layer5], dim=1))
 
         low_level1 = self.fuse_itti_tensor(torch.stack([layer1, layer2], dim=1))
+
+        print("high level shqpe : ",high_level.shape)
 
         groups= torch.stack([low_level1,low_level2,medium_level1,medium_level2,high_level ], dim=1)
 
@@ -356,7 +371,7 @@ class UNIRARE(BaseModel):
         self.cnn = MobileNetV2(**self.cnn_cfg)
 
         # load deep rare model
-        self.deeprare = RarityNetwork(threshold=0.7)
+        self.deeprare = RarityNetwork(threshold=0.2)
 
         # Initialize Post-CNN module with optional dropout
         post_cnn = [

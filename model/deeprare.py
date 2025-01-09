@@ -3,7 +3,6 @@ from numpy import expand_dims
 
 import torch
 import torch.nn.functional as F
-import tensorflow.keras.backend as K
 import matplotlib.pyplot as plt
 
 

@@ -55,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--load", 
         type=str, 
-        default="/model/weights/", 
+        default="../model/weights/", 
         help="path model to load"
     )
 

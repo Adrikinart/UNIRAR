@@ -26,6 +26,7 @@ elif torch.backends.mps.is_available():
     DEFAULT_DEVICE = torch.device("mps")
 else:
     DEFAULT_DEVICE = torch.device("cpu")
+# DEFAULT_DEVICE = torch.device("cpu")
 
 print("DEFAULT_DEVICE " ,DEFAULT_DEVICE)
 
@@ -208,8 +209,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--P3Dataset", 
         type=str, 
-        default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
-        # default="C:/Users/lelon/Documents/Dataset/P3_data/", 
+        # default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
+        default="C:/Users/lelon/Documents/Dataset/P3_data/", 
 
         help="path model to load"
     )
@@ -217,8 +218,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--O3Dataset", 
         type=str, 
-        default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
-        # default="C:/Users/lelon/Documents/Dataset/O3_data/", 
+        # default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
+        default="C:/Users/lelon/Documents/Dataset/O3_data/", 
 
         help="path model to load"
     )
@@ -267,33 +268,33 @@ if __name__ == "__main__":
 
     )
 
-    # p3_dataset_sizes = P3Dataset(
-    #     path =args.P3Dataset + "sizes/",
-    #     input_size=(args.input_size,args.input_size)
-    # )
+    p3_dataset_sizes = P3Dataset(
+        path =args.P3Dataset + "sizes/",
+        input_size=(args.input_size,args.input_size)
+    )
 
-    # p3_dataset_orientations = P3Dataset(
-    #     path =args.P3Dataset + "orientations/",
-    #     input_size=(args.input_size,args.input_size)
+    p3_dataset_orientations = P3Dataset(
+        path =args.P3Dataset + "orientations/",
+        input_size=(args.input_size,args.input_size)
 
-    # )
+    )
 
-    # p3_dataset_colors = P3Dataset(
-    #     path =args.P3Dataset + "colors/",
-    #     input_size=(args.input_size,args.input_size)
+    p3_dataset_colors = P3Dataset(
+        path =args.P3Dataset + "colors/",
+        input_size=(args.input_size,args.input_size)
 
-    # )
+    )
 
     # # Run dataset and collect results
     results['O3Dataset'] = run_dataset(o3_dataset, model, args.model)
-    # results['P3Dataset_sizes'] = run_dataset(p3_dataset_sizes, model, args.model)
-    # results['P3Dataset_orientations'] = run_dataset(p3_dataset_orientations, model, args.model)
-    # results['P3Dataset_colors'] = run_dataset(p3_dataset_colors, model, args.model)
+    results['P3Dataset_sizes'] = run_dataset(p3_dataset_sizes, model, args.model)
+    results['P3Dataset_orientations'] = run_dataset(p3_dataset_orientations, model, args.model)
+    results['P3Dataset_colors'] = run_dataset(p3_dataset_colors, model, args.model)
 
-    # # Save results to JSON file
-    # results['args'] = vars(args)
+    # Save results to JSON file
+    results['args'] = vars(args)
 
-    # # Create a name based on args information
-    # result_filename = f"results_{args.model}_{args.type}.json"
-    # with open("../res/" + result_filename, 'w') as f:
-    #     json.dump(results, f, indent=4)
+    # Create a name based on args information
+    result_filename = f"results_{args.model}_{args.type}.json"
+    with open("../res/" + result_filename, 'w') as f:
+        json.dump(results, f, indent=4)
