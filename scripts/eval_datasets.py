@@ -63,34 +63,151 @@ def post_process(map, img):
     map_ = (smap / np.amax(smap) * 255).astype(np.uint8)
     return cv2.resize(map_ , (img.shape[-2] , img.shape[-1]))
 
-def run_model(model, image, model_name):
+def run_model(model, image, model_name, image_raw):
+    img = image_raw
     tensor_image = image.to(DEFAULT_DEVICE)
-
     if model_name == "unirare" or model_name == "unirare_finetuned":
         tensor_image = tensor_image.unsqueeze(0).unsqueeze(0)
-        map_, saliency_map, saliency_details = model(tensor_image, source="SALICON")
+        saliency, saliency_rare, saliency_rare_details = model(tensor_image, source="SALICON")
 
-        saliency_map= saliency_map.squeeze(0).squeeze(0)
 
-        saliency_map = saliency_map - saliency_map.min()
-        saliency_map = saliency_map / saliency_map.max()
-        saliency_map = saliency_map.detach().cpu()
+        saliency= saliency.squeeze(0).squeeze(0)
+        saliency_rare = saliency_rare.squeeze(0).detach().cpu()
+        saliency_rare_details = saliency_rare_details.squeeze(0).squeeze(0).detach().cpu()
 
-        return saliency_map.numpy() * 255
+        saliency = post_process(saliency.detach().cpu().numpy(),img)
+        saliency = (saliency - saliency.min()) / (saliency.max() - saliency.min()) * 255
+        saliency_rare = (saliency_rare - saliency_rare.min()) / (saliency_rare.max() - saliency_rare.min()) * 255
 
+        saliency = cv2.resize(saliency, (img.shape[1], img.shape[0]))
+        saliency_rare = cv2.resize(saliency_rare.permute(1, 2, 0).numpy(), (img.shape[1], img.shape[0]))
+        saliency_rare = cv2.GaussianBlur(saliency_rare, (5, 5), 0)
+
+        saliency_fusion_add = saliency_rare + saliency
+        saliency_fusion_add = (saliency_fusion_add - saliency_fusion_add.min()) / (saliency_fusion_add.max() - saliency_fusion_add.min()) * 255
+
+        saliency_fusion_rs = np.abs(saliency_rare - saliency)
+        saliency_fusion_rs = (saliency_fusion_rs - saliency_fusion_rs.min()) / (saliency_fusion_rs.max() - saliency_fusion_rs.min()) * 255
+
+        saliency = (saliency).astype(np.uint8)
+        saliency_rare = (saliency_rare).astype(np.uint8)
+        saliency_fusion_add = (saliency_fusion_add).astype(np.uint8)
+        saliency_fusion_rs = (saliency_fusion_rs).astype(np.uint8)
+
+
+        # saliency_fusion_add_color = cv2.applyColorMap(saliency_fusion_add, cv2.COLORMAP_JET)
+        # saliency_fusion_add_color = cv2.cvtColor(saliency_fusion_add_color, cv2.COLOR_BGR2RGB)
+
+        # saliency_fusion_rs_color = cv2.applyColorMap(saliency_fusion_rs, cv2.COLORMAP_JET)
+        # saliency_fusion_rs_color = cv2.cvtColor(saliency_fusion_rs_color, cv2.COLOR_BGR2RGB)
+
+        # saliency_color = cv2.applyColorMap(saliency, cv2.COLORMAP_JET)
+        # saliency_color = cv2.cvtColor(saliency_color, cv2.COLOR_BGR2RGB)
+
+        # saliency_rare_color = cv2.applyColorMap(saliency_rare, cv2.COLORMAP_JET)
+        # saliency_rare_color = cv2.cvtColor(saliency_rare_color, cv2.COLOR_BGR2RGB)
+
+
+        # saliency_color_img = cv2.addWeighted(img, 0.6, saliency_color, 0.4, 0)
+        # saliency_rare_color_img = cv2.addWeighted(img, 0.6, saliency_rare_color, 0.4, 0)
+        # saliency_fusion_add_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_add_color, 0.4, 0)
+        # saliency_fusion_rs_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_rs_color, 0.4, 0)
+
+        # print(saliency_rare_details.shape)
+        # plt.figure(1, figsize=(10,10))
+
+        # plt.subplot(451)
+        # plt.imshow(img)
+        # plt.axis('off')
+        # plt.title('Initial Image')
+
+        # plt.subplot(452)
+        # plt.imshow(saliency_rare_color)
+        # plt.axis('off')
+        # plt.title('saliency_rare')
+
+        # plt.subplot(453)
+        # plt.imshow(saliency_color)
+        # plt.axis('off')
+        # plt.title('saliency')
+
+        # plt.subplot(454)
+        # plt.imshow(saliency_fusion_add_color)
+        # plt.axis('off')
+        # plt.title('fusion_add')
+
+        # plt.subplot(455)
+        # plt.imshow(saliency_fusion_rs_color)
+        # plt.axis('off')
+        # plt.title('fusion_rs')
+
+
+        # plt.subplot(456)
+        # plt.imshow(img)
+        # plt.axis('off')
+        # plt.title('Initial Image')
+
+        # plt.subplot(457)
+        # plt.imshow(saliency_rare_color_img)
+        # plt.axis('off')
+        # plt.title('saliency_rare')
+
+        # plt.subplot(458)
+        # plt.imshow(saliency_color_img)
+        # plt.axis('off')
+        # plt.title('saliency')
+
+        # plt.subplot(459)
+        # plt.imshow(saliency_fusion_add_color_img)
+        # plt.axis('off')
+        # plt.title('fusion_add')
+
+        # plt.subplot(4,5,10)
+        # plt.imshow(saliency_fusion_rs_color_img)
+        # plt.axis('off')
+        # plt.title('fusion_rs')
+
+        # for i in range(0,saliency_rare_details.shape[0]):
+            
+        #     print(i)
+        #     plt.subplot(4,5,11 + i)
+        #     plt.imshow(saliency_rare_details[i,:, :])
+        #     plt.axis('off')
+        #     plt.title(f'Level {i}Saliency Map')
+
+        # plt.show()
+
+        # Normalize sal between 0 and 255
+        saliency_rare = cv2.normalize(saliency_rare, None, 0, 255, cv2.NORM_MINMAX)
+
+        return {
+            'saliency' : saliency,
+            'saliency_rare': saliency_rare,
+            'saliency_rare_details' : saliency_rare_details,
+            'saliency_fusion_add' : saliency_fusion_add,
+            'saliency_fusion_rs' : saliency_fusion_rs
+        }
 
 
     elif model_name == "deeprare":
         tensor_image = tensor_image.unsqueeze(0)
-        saliency_map, saliency_details  = model(tensor_image)
+        saliency_rare, saliency_rare_details  = model(tensor_image)
 
-        saliency_map= saliency_map.squeeze(0).squeeze(0)
+        saliency_rare = saliency_rare.squeeze(0).detach().cpu()
+        saliency_rare_details = saliency_rare_details.squeeze(0).squeeze(0).detach().cpu()
 
-        saliency_map = saliency_map - saliency_map.min()
-        saliency_map = saliency_map / saliency_map.max()
-        saliency_map = saliency_map.detach().cpu()
+        saliency_rare = (saliency_rare - saliency_rare.min()) / (saliency_rare.max() - saliency_rare.min()) * 255
+        saliency_rare = cv2.resize(saliency_rare.permute(1, 2, 0).numpy(), (img.shape[1], img.shape[0]))
+        saliency_rare = cv2.GaussianBlur(saliency_rare, (5, 5), 0)
 
-        return saliency_map.numpy() * 255
+        return {
+            'saliency' : None,
+            'saliency_rare': saliency_rare,
+            'saliency_rare_details' : saliency_rare_details,
+            'saliency_fusion_add' : None,
+            'saliency_fusion_rs' : None
+        }
+
     
     elif model_name == "unisal":
         tensor_image = tensor_image.unsqueeze(0).unsqueeze(0)
@@ -99,7 +216,13 @@ def run_model(model, image, model_name):
         saliency_map = saliency_map.squeeze(0).squeeze(0).detach().cpu().numpy()
         saliency_map = post_process(saliency_map, tensor_image)
 
-        return saliency_map
+        return {
+            'saliency' : saliency_map,
+            'saliency_rare': None,
+            'saliency_rare_details' : None,
+            'saliency_fusion_add' : None,
+            'saliency_fusion_rs' : None
+        }
     
 def parse_list_of_ints(value: str):
     """
@@ -117,29 +240,70 @@ def parse_list_of_ints(value: str):
         raise argparse.ArgumentTypeError(f"'{value}' n'est pas une liste d'entiers valide. Format attendu: '1,2,3'")
     
 
-def run_dataset(dataset, model, model_name):
+def run_dataset(dataset_name,dataset, model, model_name, path_folder):
     results = []
     total = len(dataset)-1
     start_time = time.time()
-    
+
+    # Create a folder with name based on args information
+    result_folder_path = os.path.join(path_folder, dataset_name)
+
+    # # Create the folder if it doesn't exist
+    # if not os.path.exists(result_folder_path):
+    #     os.makedirs(result_folder_path)
+
+
     for i in range(total):
-        img, targ, dist, _ = dataset[i]
+        img, targ, dist, _, file_name = dataset[i]
 
         # run model 
         start_time_model = time.time()
-        sal = run_model(model, img, model_name)
+        saliency_images = run_model(model, img, model_name,cv2.imread(file_name))
 
-        # resize sal
-        sal = cv2.resize(sal, (targ.shape[-2], targ.shape[-1]))
+        # plt.figure(figsize=(12,12))
+        # plt.subplot(351)
+        # plt.imshow(cv2.imread(file_name))
+        # plt.axis('off')
+        # plt.title('Image')
 
-        # Normalize sal between 0 and 255
-        sal = (sal - np.min(sal)) / (np.max(sal) - np.min(sal)) * 255
+        # plt.subplot(356)
+        # plt.imshow(cv2.imread(file_name))
+        # plt.axis('off')
+        # plt.title('Image')
+        
+        # compute metrics
+        index = 1
+        for k , sal in saliency_images.items():
+            if sal is None:
+                continue
 
-        # # compute metrics 
-        msr = metrics.compute_msr(sal, targ.squeeze(0).numpy(), dist.squeeze(0).numpy())
+            if k == 'saliency_rare_details':
+                continue
+
+            # # subplot
+            # plt.subplot(3,5,1+ index)
+            # plt.imshow(sal)
+            # plt.axis('off')
+            # plt.title(k)
+
+            # # subplot
+            # plt.subplot(3,5,6+ index)
+            # plt.imshow(sal)
+            # plt.axis('off')
+            # plt.title(k + 'img')
+
+            # resize sal
+            sal = cv2.resize(sal, (targ.shape[-2], targ.shape[-1]))
+
+            # Normalize sal between 0 and 255
+            sal = cv2.normalize(sal, None, 0, 255, cv2.NORM_MINMAX)
+
+            # # compute metrics 
+            msr = metrics.compute_msr(sal, targ.squeeze(0).numpy(), dist.squeeze(0).numpy())
 
         # # Add time process for each image
         msr['process_time'] = time.time() - start_time_model
+        msr['file_name'] = f"image_result_{i}.png"
         results.append(msr)
 
         process_time = time.time() - start_time
@@ -152,29 +316,8 @@ def run_dataset(dataset, model, model_name):
         sys.stdout.write(text)
         sys.stdout.flush()
         
-        # print()
-        # print(f"MSRt: {msr['msrt']:.4f} | MSRb: {msr['msrb']:.4f} | Time: {msr['process_time']:.2f}s")
-
-        # # Plot img, sal, targ, and dist on the same imshow using subplot
-        # fig, axs = plt.subplots(1, 4, figsize=(20, 5))
-        # axs[0].imshow(img.permute(1, 2, 0).cpu().numpy())
-        # axs[0].set_title('Image')
-        # axs[0].axis('off')
-
-        # axs[1].imshow(sal, cmap='gray')
-        # axs[1].set_title('Saliency Map')
-        # axs[1].axis('off')
-
-        # axs[2].imshow(targ.squeeze(0).cpu().numpy(), cmap='gray')
-        # axs[2].set_title('Target')
-        # axs[2].axis('off')
-
-        # axs[3].imshow(dist.squeeze(0).cpu().numpy(), cmap='gray')
-        # axs[3].set_title('Distribution')
-        # axs[3].axis('off')
-
+        # plt.savefig(os.path.join(result_folder_path, f"image_result_{i}.jpg"))
         # plt.show()
-
         # break
 
 
@@ -201,7 +344,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model", 
         type=str, 
-        default="deep_rare", 
+        default="deeprare", 
         choices=["unirare", "unirare_finetuned", "unisal", "deeprare"],
         help="Select model to use"
     )
@@ -209,8 +352,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--P3Dataset", 
         type=str, 
-        default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
-        # default="C:/Users/lelon/Documents/Dataset/P3_data/", 
+        # default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
+        default="C:/Users/lelon/Documents/Dataset/P3_data/", 
 
         help="path model to load"
     )
@@ -218,8 +361,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--O3Dataset", 
         type=str, 
-        default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
-        # default="C:/Users/lelon/Documents/Dataset/O3_data/", 
+        # default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
+        default="C:/Users/lelon/Documents/Dataset/O3_data/", 
 
         help="path model to load"
     )
@@ -261,40 +404,43 @@ if __name__ == "__main__":
     # Laod model
     model = load_model(args,"../model/weights/")
 
+    # Create a folder with name based on args information
+    result_folder = f"results_{args.model}_{args.type}"
+    result_folder_path = os.path.join("../res", result_folder)
+
+    # Create the folder if it doesn't exist
+    if not os.path.exists(result_folder_path):
+        os.makedirs(result_folder_path)
+
     # load dataloaders
     o3_dataset = O3Dataset(
         path =args.O3Dataset,
-        input_size=(args.input_size,args.input_size)
-
+        input_size=(args.input_size,args.input_size),
     )
 
     p3_dataset_sizes = P3Dataset(
         path =args.P3Dataset + "sizes/",
-        input_size=(args.input_size,args.input_size)
+        input_size=(args.input_size,args.input_size),
     )
 
     p3_dataset_orientations = P3Dataset(
         path =args.P3Dataset + "orientations/",
-        input_size=(args.input_size,args.input_size)
-
+        input_size=(args.input_size,args.input_size),
     )
 
     p3_dataset_colors = P3Dataset(
         path =args.P3Dataset + "colors/",
-        input_size=(args.input_size,args.input_size)
-
+        input_size=(args.input_size,args.input_size),
     )
 
-    # # Run dataset and collect results
-    results['O3Dataset'] = run_dataset(o3_dataset, model, args.model)
-    results['P3Dataset_sizes'] = run_dataset(p3_dataset_sizes, model, args.model)
-    results['P3Dataset_orientations'] = run_dataset(p3_dataset_orientations, model, args.model)
-    results['P3Dataset_colors'] = run_dataset(p3_dataset_colors, model, args.model)
+    # Run dataset and collect results
+    results['O3Dataset'] = run_dataset("O3Dataset",o3_dataset, model, args.model,path_folder= result_folder_path)
+    results['P3Dataset_sizes'] = run_dataset('P3Dataset_sizes',p3_dataset_sizes, model, args.model,path_folder= result_folder_path)
+    results['P3Dataset_orientations'] = run_dataset('P3Dataset_orientations',p3_dataset_orientations, model, args.model,path_folder= result_folder_path)
+    results['P3Dataset_colors'] = run_dataset('P3Dataset_colors',p3_dataset_colors, model, args.model,path_folder= result_folder_path)
 
     # Save results to JSON file
-    results['args'] = vars(args)
-
-    # Create a name based on args information
-    result_filename = f"results_{args.model}_{args.type}.json"
-    with open("../res/" + result_filename, 'w') as f:
-        json.dump(results, f, indent=4)
+    json_file_path = os.path.join(result_folder_path, "results.json")
+    with open(json_file_path, "w") as json_file:
+        json.dump(results, json_file, indent=4)
+    print("Results saved to:", json_file_path)

@@ -98,7 +98,7 @@ class O3Dataset(Dataset):
         targ = self.preprocess(self.get_target(img_idx), out_size=self.target_size, data='sal')
         dist = self.preprocess(self.get_dist(img_idx), out_size=self.target_size, data='fix')
 
-        return img, targ, dist, self.target_size
+        return img, targ, dist, self.target_size, self.img_dir / self.data[img_idx][0]
 
     def __getitem__(self, idx):
         return self.get_data(idx)

@@ -105,50 +105,131 @@ if __name__ == "__main__":
             # process image
             tensor_image = tensor_image.unsqueeze(0).unsqueeze(0)
             start_time = time.time()
-            map_, SAL, groups = model(tensor_image, source="SALICON")
+            saliency, saliency_rare, saliency_rare_details = model(tensor_image, source="SALICON")
             end_time = time.time()
             print(f"Processing time: {end_time - start_time} seconds")
 
-            map_ = map_.squeeze(0).squeeze(0).squeeze(0).detach().cpu().numpy()
-            map_ = post_process(map_,img)
+            saliency= saliency.squeeze(0).squeeze(0)
+            saliency_rare = saliency_rare.squeeze(0).detach().cpu()
+            saliency_rare_details = saliency_rare_details.squeeze(0).squeeze(0).detach().cpu()
 
-            SAL = SAL.squeeze(0).detach().cpu()
-            groups = groups.squeeze(0).squeeze(0).detach().cpu()
+            saliency = post_process(saliency.detach().cpu().numpy(),img)
+            saliency = (saliency - saliency.min()) / (saliency.max() - saliency.min()) * 255
+            saliency_rare = (saliency_rare - saliency_rare.min()) / (saliency_rare.max() - saliency_rare.min()) * 255
 
-            SAL = (SAL - SAL.min()) / (SAL.max() - SAL.min()) * 255
+            saliency = cv2.resize(saliency, (img.shape[1], img.shape[0]))
+            saliency_rare = cv2.resize(saliency_rare.permute(1, 2, 0).numpy(), (img.shape[1], img.shape[0]))
+            saliency_rare = cv2.GaussianBlur(saliency_rare, (5, 5), 0)
 
-            map_ = cv2.resize(SAL.permute(1, 2, 0).numpy(), (img.shape[1], img.shape[0]))
-            map_ = (map_).astype(np.uint8)
-            map_color = cv2.applyColorMap(map_, cv2.COLORMAP_JET)
-            map_color = cv2.cvtColor(map_color, cv2.COLOR_BGR2RGB)
-            weighted_img = cv2.addWeighted(img, 0.6, map_color, 0.4, 0)
+            saliency_fusion_add = saliency_rare + saliency
+            saliency_fusion_add = (saliency_fusion_add - saliency_fusion_add.min()) / (saliency_fusion_add.max() - saliency_fusion_add.min()) * 255
+
+            saliency_fusion_rs = np.abs(saliency_rare - saliency)
+            saliency_fusion_rs = (saliency_fusion_rs - saliency_fusion_rs.min()) / (saliency_fusion_rs.max() - saliency_fusion_rs.min()) * 255
+
+            saliency_fusion_sr = np.abs(saliency - saliency_rare)
+            saliency_fusion_sr = (saliency_fusion_sr - saliency_fusion_sr.min()) / (saliency_fusion_sr.max() - saliency_fusion_sr.min()) * 255
 
 
+            saliency = (saliency).astype(np.uint8)
+            saliency_rare = (saliency_rare).astype(np.uint8)
+            saliency_fusion_add = (saliency_fusion_add).astype(np.uint8)
+            saliency_fusion_rs = (saliency_fusion_rs).astype(np.uint8)
+            saliency_fusion_sr = (saliency_fusion_sr).astype(np.uint8)
+
+
+
+
+            saliency_fusion_add_color = cv2.applyColorMap(saliency_fusion_add, cv2.COLORMAP_JET)
+            saliency_fusion_add_color = cv2.cvtColor(saliency_fusion_add_color, cv2.COLOR_BGR2RGB)
+
+            saliency_fusion_rs_color = cv2.applyColorMap(saliency_fusion_rs, cv2.COLORMAP_JET)
+            saliency_fusion_rs_color = cv2.cvtColor(saliency_fusion_rs_color, cv2.COLOR_BGR2RGB)
+
+            saliency_fusion_sr_color = cv2.applyColorMap(saliency_fusion_sr, cv2.COLORMAP_JET)
+            saliency_fusion_sr_color = cv2.cvtColor(saliency_fusion_sr_color, cv2.COLOR_BGR2RGB)
+
+
+            saliency_color = cv2.applyColorMap(saliency, cv2.COLORMAP_JET)
+            saliency_color = cv2.cvtColor(saliency_color, cv2.COLOR_BGR2RGB)
+
+            saliency_rare_color = cv2.applyColorMap(saliency_rare, cv2.COLORMAP_JET)
+            saliency_rare_color = cv2.cvtColor(saliency_rare_color, cv2.COLOR_BGR2RGB)
+
+
+            saliency_color_img = cv2.addWeighted(img, 0.6, saliency_color, 0.4, 0)
+            saliency_rare_color_img = cv2.addWeighted(img, 0.6, saliency_rare_color, 0.4, 0)
+
+            saliency_fusion_add_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_add_color, 0.4, 0)
+            saliency_fusion_rs_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_rs_color, 0.4, 0)
+            saliency_fusion_sr_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_sr_color, 0.4, 0)
+
+
+
+            print(saliency_rare_details.shape)
             plt.figure(1, figsize=(10,10))
 
-            plt.subplot(431)
+            plt.subplot(451)
             plt.imshow(img)
             plt.axis('off')
             plt.title('Initial Image')
 
-            plt.subplot(432)
-            plt.imshow(map_)
+            plt.subplot(452)
+            plt.imshow(saliency_rare_color)
             plt.axis('off')
-            plt.title('Final Saliency Map')
+            plt.title('saliency_rare')
 
-            plt.subplot(433)
-            plt.imshow(weighted_img)
+            plt.subplot(453)
+            plt.imshow(saliency_color)
             plt.axis('off')
-            plt.title('weighted_img')
+            plt.title('saliency')
 
-            for i in range(0,groups.shape[0]):
+            plt.subplot(454)
+            plt.imshow(saliency_fusion_add_color)
+            plt.axis('off')
+            plt.title('fusion_add')
 
-                plt.subplot(434 + i)
-                plt.imshow(groups[i,:, :])
+            plt.subplot(455)
+            plt.imshow(saliency_fusion_rs_color)
+            plt.axis('off')
+            plt.title('fusion_rs')
+
+
+            plt.subplot(456)
+            plt.imshow(img)
+            plt.axis('off')
+            plt.title('Initial Image')
+
+            plt.subplot(457)
+            plt.imshow(saliency_rare_color_img)
+            plt.axis('off')
+            plt.title('saliency_rare')
+
+            plt.subplot(458)
+            plt.imshow(saliency_color_img)
+            plt.axis('off')
+            plt.title('saliency')
+
+            plt.subplot(459)
+            plt.imshow(saliency_fusion_add_color_img)
+            plt.axis('off')
+            plt.title('fusion_add')
+
+            plt.subplot(4,5,10)
+            plt.imshow(saliency_fusion_rs_color_img)
+            plt.axis('off')
+            plt.title('fusion_rs')
+
+            for i in range(0,saliency_rare_details.shape[0]):
+                
+                print(i)
+                plt.subplot(4,5,11 + i)
+                plt.imshow(saliency_rare_details[i,:, :])
                 plt.axis('off')
                 plt.title(f'Level {i}Saliency Map')
 
             plt.show()
+
 
             
         elif args.type == 'video':
