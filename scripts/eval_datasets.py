@@ -35,16 +35,19 @@ def load_model(args, weights_path):
     elif args.model == "unirare_finetuned":
         model = UNIRARE(bypass_rnn=False)
         if os.path.exists(weights_path + "weights_best.pth"):
-            model.load_weights(weights_path + "weights_best.pth")
+            print("Loading model")
+            model.load_weights( weights_path + "weights_best.pth")
+        else:
+            print("Model not found")
     elif args.model == "unisal":
         model = UNISAL(bypass_rnn=False)
-    elif args.model == "deep_rare":
+
+        if os.path.exists(weights_path + "weights_best.pth"):
+            model.load_weights(weights_path + "weights_best.pth")
+    elif args.model == "deeprare":
         print("DEEP RARE")
         model = DeepRare(
             threshold=args.threshold,
-            # model_name=args.model_name,
-            pretrained=args.pretrained,
-            layers=args.layers_to_extract
         )
     else:
         raise ValueError(f"Unknown model name: {args.model}")
@@ -64,33 +67,38 @@ def run_model(model, image, model_name):
 
     if model_name == "unirare" or model_name == "unirare_finetuned":
         tensor_image = tensor_image.unsqueeze(0).unsqueeze(0)
-        map_, SAL, groups = model(tensor_image, source="SALICON")
+        map_, saliency_map, saliency_details = model(tensor_image, source="SALICON")
 
-        SAL = SAL.squeeze(0)
-        SAL = SAL - SAL.min()
-        SAL = SAL / SAL.max()
-        SAL = SAL.detach().cpu()
+        saliency_map= saliency_map.squeeze(0).squeeze(0)
 
-        return SAL.numpy() * 255
+        saliency_map = saliency_map - saliency_map.min()
+        saliency_map = saliency_map / saliency_map.max()
+        saliency_map = saliency_map.detach().cpu()
 
-    elif model_name == "deep_rare":
+        return saliency_map.numpy() * 255
+
+
+
+    elif model_name == "deeprare":
         tensor_image = tensor_image.unsqueeze(0)
-        SAL, groups  = model(tensor_image)
+        saliency_map, saliency_details  = model(tensor_image)
 
-        SAL = SAL - SAL.min()
-        SAL = SAL / SAL.max()
-        SAL = SAL.detach().cpu()
+        saliency_map= saliency_map.squeeze(0).squeeze(0)
 
-        return SAL.numpy() * 255
+        saliency_map = saliency_map - saliency_map.min()
+        saliency_map = saliency_map / saliency_map.max()
+        saliency_map = saliency_map.detach().cpu()
+
+        return saliency_map.numpy() * 255
     
     elif model_name == "unisal":
         tensor_image = tensor_image.unsqueeze(0).unsqueeze(0)
 
-        map_ = model(tensor_image, source="SALICON")
-        map_ = map_.squeeze(0).squeeze(0).squeeze(0).detach().cpu().numpy()
-        map_ = post_process(map_, tensor_image)
+        saliency_map = model(tensor_image, source="SALICON")
+        saliency_map = saliency_map.squeeze(0).squeeze(0).detach().cpu().numpy()
+        saliency_map = post_process(saliency_map, tensor_image)
 
-        return map_
+        return saliency_map
     
 def parse_list_of_ints(value: str):
     """
@@ -123,6 +131,9 @@ def run_dataset(dataset, model, model_name):
         # resize sal
         sal = cv2.resize(sal, (targ.shape[-2], targ.shape[-1]))
 
+        # Normalize sal between 0 and 255
+        sal = (sal - np.min(sal)) / (np.max(sal) - np.min(sal)) * 255
+
         # # compute metrics 
         msr = metrics.compute_msr(sal, targ.squeeze(0).numpy(), dist.squeeze(0).numpy())
 
@@ -136,11 +147,35 @@ def run_dataset(dataset, model, model_name):
         bar_length = 40
         block = int(round(bar_length * progress))
         fps = (i + 1) / process_time
-        text = f"\rProgress: [{'#' * block + '-' * (bar_length - block)}] {progress * 100:.2f}% | FPS: {fps:.2f} | {i}/{total}"
+        text = f"\rProgress: [{'#' * block + '-' * (bar_length - block)}] {progress * 100:.2f}% | FPS: {fps:.2f} | {i}/{total} | Time: {process_time:.2f}s"
         sys.stdout.write(text)
         sys.stdout.flush()
+        
+        # print()
+        # print(f"MSRt: {msr['msrt']:.4f} | MSRb: {msr['msrb']:.4f} | Time: {msr['process_time']:.2f}s")
+
+        # # Plot img, sal, targ, and dist on the same imshow using subplot
+        # fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+        # axs[0].imshow(img.permute(1, 2, 0).cpu().numpy())
+        # axs[0].set_title('Image')
+        # axs[0].axis('off')
+
+        # axs[1].imshow(sal, cmap='gray')
+        # axs[1].set_title('Saliency Map')
+        # axs[1].axis('off')
+
+        # axs[2].imshow(targ.squeeze(0).cpu().numpy(), cmap='gray')
+        # axs[2].set_title('Target')
+        # axs[2].axis('off')
+
+        # axs[3].imshow(dist.squeeze(0).cpu().numpy(), cmap='gray')
+        # axs[3].set_title('Distribution')
+        # axs[3].axis('off')
+
+        # plt.show()
 
         # break
+
 
     print()  # New line after progress bar is complete
     return results
@@ -165,8 +200,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model", 
         type=str, 
-        default="unirare", 
-        choices=["unirare", "unirare_finetuned", "unisal", "deep_rare"],
+        default="deep_rare", 
+        choices=["unirare", "unirare_finetuned", "unisal", "deeprare"],
         help="Select model to use"
     )
 
@@ -198,15 +233,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--layers_to_extract", 
         type=parse_list_of_ints, 
-        default="1,2,  4,5,8,  9,11,12,13,  16,17,18,19,  26,27,28,29", 
-        # default="6,7, 12,13,14,  16,17,18", 
+        # default="4,5,8, 9,11,12,13,  16,17,18,19,  26,27,28,29", 
+        default="4 , 5, 11 , 14", 
         help="Liste d'entiers séparés par des virgules (ex: 1,2,3)."
     )
 
     parser.add_argument(
         "--threshold", 
         type=float, 
-        default=None, 
+        default=0.7, 
         help="Threshold for torch rare 2021"
     )
 
@@ -232,33 +267,33 @@ if __name__ == "__main__":
 
     )
 
-    p3_dataset_sizes = P3Dataset(
-        path =args.P3Dataset + "sizes/",
-        input_size=(args.input_size,args.input_size)
-    )
+    # p3_dataset_sizes = P3Dataset(
+    #     path =args.P3Dataset + "sizes/",
+    #     input_size=(args.input_size,args.input_size)
+    # )
 
-    p3_dataset_orientations = P3Dataset(
-        path =args.P3Dataset + "orientations/",
-        input_size=(args.input_size,args.input_size)
+    # p3_dataset_orientations = P3Dataset(
+    #     path =args.P3Dataset + "orientations/",
+    #     input_size=(args.input_size,args.input_size)
 
-    )
+    # )
 
-    p3_dataset_colors = P3Dataset(
-        path =args.P3Dataset + "colors/",
-        input_size=(args.input_size,args.input_size)
+    # p3_dataset_colors = P3Dataset(
+    #     path =args.P3Dataset + "colors/",
+    #     input_size=(args.input_size,args.input_size)
 
-    )
+    # )
 
-    # Run dataset and collect results
+    # # Run dataset and collect results
     results['O3Dataset'] = run_dataset(o3_dataset, model, args.model)
-    results['P3Dataset_sizes'] = run_dataset(p3_dataset_sizes, model, args.model)
-    results['P3Dataset_orientations'] = run_dataset(p3_dataset_orientations, model, args.model)
-    results['P3Dataset_colors'] = run_dataset(p3_dataset_colors, model, args.model)
+    # results['P3Dataset_sizes'] = run_dataset(p3_dataset_sizes, model, args.model)
+    # results['P3Dataset_orientations'] = run_dataset(p3_dataset_orientations, model, args.model)
+    # results['P3Dataset_colors'] = run_dataset(p3_dataset_colors, model, args.model)
 
-    # Save results to JSON file
-    results['args'] = vars(args)
+    # # Save results to JSON file
+    # results['args'] = vars(args)
 
-    # Create a name based on args information
-    result_filename = f"results_{args.model}_{args.type}.json"
-    with open("../res/" + result_filename, 'w') as f:
-        json.dump(results, f, indent=4)
+    # # Create a name based on args information
+    # result_filename = f"results_{args.model}_{args.type}.json"
+    # with open("../res/" + result_filename, 'w') as f:
+    #     json.dump(results, f, indent=4)

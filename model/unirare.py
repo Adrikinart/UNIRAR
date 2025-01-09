@@ -8,7 +8,6 @@ import torch.nn.functional as F
 
 from .cgru import ConvGRU
 from .MobileNetV2 import MobileNetV2, InvertedResidual
-from .deeprare import *
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -36,6 +35,159 @@ def log_softmax(x):
     x = x.view(x.size(0), -1)
     x = F.log_softmax(x, dim=1)
     return x.view(x_size)
+
+
+
+class RarityNetwork(nn.Module):
+
+    def __init__(self, threshold= None):
+        super(RarityNetwork, self).__init__()
+        self.threshold= threshold
+    
+
+    def rarity_tensor(self, channel):
+        B,C , a , b = channel.shape
+        if a > 14:  # manage margins for high-level features
+            channel[:,:,0:1, :] = 0
+            channel[:,:,:, a - 1:a] = 0
+            channel[:,:,:, 0:1] = 0
+            channel[:,:,b - 1:b, :] = 0
+        elif a > 28:  # manage margins for mid-level features
+            channel[:,:,0:2, :] = 0
+            channel[:,:,:, a - 2:a] = 0
+            channel[:,:,:, 0:2] = 0
+            channel[:,:,b - 2:b, :] = 0
+        elif a > 50:  # manage margins for low-level features
+            channel[:,:,0:3, :] = 0
+            channel[:,:,:, a - 3:a] = 0
+            channel[:,:,:, 0:3] = 0
+            channel[:,:,b - 3:b, :] = 0
+
+        
+        channel = channel.view(B,C, -1)
+        tensor_min = channel.min(dim=2, keepdim=True)[0]
+        tensor_max = channel.max(dim=2, keepdim=True)[0]
+        channel = (channel - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        channel = channel * 256
+
+        bins = 11
+
+        min_val, max_val = channel.min(), channel.max()
+        bin_edges = torch.linspace(min_val, max_val, steps=bins + 1, device=channel.device)
+
+        bin_indices = torch.bucketize(channel, bin_edges, right=True) - 1
+        bin_indices = bin_indices.clamp(0, bins - 1)
+
+        histograms = torch.zeros((B,C, bins), device=channel.device)
+        histograms.scatter_add_(2, bin_indices, torch.ones_like(bin_indices, dtype=torch.float, device=channel.device))    
+
+        histograms = histograms / histograms.sum(dim=2, keepdim=True)
+        histograms = -torch.log(histograms + 1e-4)
+        hists_idx = ((channel/256.) * (bins - 1)).long().clamp(0, bins - 1)
+
+        dst = histograms.gather(2, hists_idx)
+
+        tensor_min = dst.min(dim=2, keepdim=True)[0]
+        tensor_max = dst.max(dim=2, keepdim=True)[0]
+        dst = (dst - tensor_min) / (tensor_max - tensor_min + 1e-8)
+
+        if self.threshold is not None:
+            dst[dst < self.threshold] = 0
+
+        map_max = dst.max(dim=2, keepdim=True)[0]
+        map_mean = dst.mean(dim=2, keepdim=True)
+        map_weight = (map_max - map_mean) ** 2  # Itti-like weight
+        dst = dst * map_weight
+
+        dst = torch.pow(dst, 2)
+        ma = dst.max(dim=2, keepdim=True)[0]
+        me = dst.mean(dim=2, keepdim=True)
+        w = (ma - me) * (ma - me)
+        dst = w * dst
+
+        tensor_min = dst.min(dim=2, keepdim=True)[0]
+        tensor_max = dst.max(dim=2, keepdim=True)[0]
+        dst = (dst - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        dst = dst.view(B,C, a,b)
+
+        if a > 28:
+            dst[:,:,0:2, :] = 0
+            dst[:,:,:, a - 2:a] = 0
+            dst[:,:,:, 0:2] = 0
+            dst[:,:,b - 2:b, :] = 0
+        elif a > 50:
+            dst[:,:,0:3, :] = 0
+            dst[:,:,:, a - 3:a] = 0
+            dst[:,:,:, 0:3] = 0
+            dst[:,:,b - 3:b, :] = 0
+
+        dst = dst.view(B,C, -1)
+        dst = torch.pow(dst, 2)
+        ma = dst.max(dim=2, keepdim=True)[0]
+        me = dst.mean(dim=2, keepdim=True)
+        w = (ma - me) * (ma - me)
+        dst = w * dst
+
+        return dst.view(B,C, a,b)
+
+
+    def apply_rarity(self, layer_output, layer_ind):
+        features_processed = self.rarity_tensor(layer_output[layer_ind - 1].clone())
+        features_processed =features_processed.sum(dim=1)
+        return F.interpolate(features_processed.clone().unsqueeze(0), (240,240), mode='bilinear', align_corners=False).squeeze(0)
+
+    def fuse_itti_tensor(self, tensor):
+        # Itti-like fusion between two maps
+        B, C , W , H = tensor.shape
+        tensor= tensor.view(B, C, -1)
+
+        # Normalize 0 1
+        tensor_min = tensor.min(dim=2, keepdim=True)[0]
+        tensor_max = tensor.max(dim=2, keepdim=True)[0]
+        tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
+
+        # Compute Weights
+        tensor_max = tensor.max(dim=2, keepdim=True)[0]
+        tensor_mean = tensor.mean(dim=2, keepdim=True)
+        w1 = torch.square(tensor_max - tensor_mean)
+        tensor = w1 * tensor
+        tensor= tensor.sum(dim=1)
+
+        # normalize 0 255
+        tensor_min = tensor.min(dim=1, keepdim=True)[0]
+        tensor_max = tensor.max(dim=1, keepdim=True)[0]
+        tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        tensor *= 255
+
+        return tensor.view(B,W,H)
+    
+    def forward(self, layer_output):
+        layer1 = self.apply_rarity(layer_output, 1)
+        layer2 = self.apply_rarity(layer_output, 2)
+        layer4 = self.apply_rarity(layer_output, 4)
+        layer5 = self.apply_rarity(layer_output, 5)
+        layer7 = self.apply_rarity(layer_output, 7)
+        layer8 = self.apply_rarity(layer_output, 8)
+        layer9 = self.apply_rarity(layer_output, 9)
+        layer11 = self.apply_rarity(layer_output, 11)
+        layer12 = self.apply_rarity(layer_output, 12)
+        layer13 = self.apply_rarity(layer_output, 13)
+        layer15 = self.apply_rarity(layer_output, 15)
+        layer16 = self.apply_rarity(layer_output, 16)
+        layer17 = self.apply_rarity(layer_output, 17)
+
+        high_level = self.fuse_itti_tensor(torch.stack([layer16, layer17, layer15],dim=1))
+        medium_level2 = self.fuse_itti_tensor(torch.stack([layer12, layer13, layer11], dim=1))
+        medium_level1 = self.fuse_itti_tensor(torch.stack([layer8, layer9, layer7], dim=1))
+        low_level2 = self.fuse_itti_tensor(torch.stack([layer4, layer5], dim=1))
+
+        low_level1 = self.fuse_itti_tensor(torch.stack([layer1, layer2], dim=1))
+
+        groups= torch.stack([low_level1,low_level2,medium_level1,medium_level2,high_level ], dim=1)
+
+        SAL = groups.sum(dim= 1)
+        return SAL, groups
+
 
 
 class BaseModel(nn.Module):
@@ -204,7 +356,7 @@ class UNIRARE(BaseModel):
         self.cnn = MobileNetV2(**self.cnn_cfg)
 
         # load deep rare model
-        self.deeprare = RarityNetwork()
+        self.deeprare = RarityNetwork(threshold=0.7)
 
         # Initialize Post-CNN module with optional dropout
         post_cnn = [
@@ -522,11 +674,10 @@ class UNIRARE(BaseModel):
         sal_rare = []
         level_rare= []
         for t, img in enumerate(torch.unbind(x, dim=1)):
-            im_feat_1x, im_feat_2x, im_feat_4x, layers = self.cnn(img,layers= self.layers)
+            im_feat_1x, im_feat_2x, im_feat_4x, layers = self.cnn(img,layers= True)
 
-
-            
-            SAL, groups = self.deeprare(layers,target_size)
+            # SAL, groups = self.deeprare(layers,target_size)
+            SAL, groups = self.deeprare(layers)
 
             sal_rare.append(SAL)
             level_rare.append(groups)

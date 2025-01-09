@@ -35,7 +35,7 @@ class P3Dataset(Dataset):
         self.target_size = target_size
 
         self.load_data()
-        random.shuffle(self.data)
+        # random.shuffle(self.data)
 
     def load_data(self):
         self.data = []

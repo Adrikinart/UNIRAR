@@ -11,7 +11,7 @@ import torchvision.transforms as transforms
 
 import sys
 sys.path.append('..')
-from model import FeatureExtractor, DeepRare, UNISAL
+from model import UNISAL
 from data import FileOpener
 
 
@@ -66,6 +66,7 @@ if __name__ == "__main__":
     if args.load is not None:
         path_ = os.path.dirname(os.path.abspath(__file__))
         if os.path.exists(args.load + "weights_best.pth"):
+            print("Load model wheigts")
             model.load_weights( args.load + "weights_best.pth")
 
 
@@ -114,57 +115,11 @@ if __name__ == "__main__":
             plt.title('Final Saliency Map')
             plt.show()
 
-        elif args.type == 'video':
-            tensors_frames = opener.open_video(
-                file = go_path,
-                fps = 15,
-                seq_len=12,
-                size = (412,412)
-            )
-            # process video frame
-
-
-    #     img = cv2.imread(go_path)
-    #     if img is None:
-    #         continue
-
-    #     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    #     orig_h, orig_w = img.shape[:2]
-
-    #     input_image = process_image(img)
-
-    #     # Create a feature extractor instance
-    #     feature_extractor = FeatureExtractor(model, args.layers_to_extract)
-
-    #     # Get feature maps
-    #     with torch.no_grad():  # Disable gradient computation for inference
-    #         feature_maps = feature_extractor(input_image)
-
-    #     print(f"Numbers features maps : {len(feature_maps)}")
-
-    #     for layer in feature_maps:
-    #         print(f" - {layer.shape}")
-
-    #     SAL, groups = rarity_network(feature_maps)
-
-
-    #     plt.figure(1)
-
-    #     plt.subplot(421)
-    #     plt.imshow(img)
-    #     plt.axis('off')
-    #     plt.title('Initial Image')
-
-    #     plt.subplot(422)
-    #     plt.imshow(SAL)
-    #     plt.axis('off')
-    #     plt.title('Final Saliency Map')
-
-    #     for i in range(0,groups.shape[-1]):
-
-    #         plt.subplot(423 + i)
-    #         plt.imshow(groups[:, :, i])
-    #         plt.axis('off')
-    #         plt.title(f'Level {i}Saliency Map')
-
-    #     plt.show()
+        # elif args.type == 'video':
+        #     tensors_frames = opener.open_video(
+        #         file = go_path,
+        #         fps = 15,
+        #         seq_len=12,
+        #         size = (412,412)
+        #     )
+        #     # process video frame

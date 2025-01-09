@@ -10,7 +10,8 @@ import torchvision.transforms as transforms
 
 import sys 
 sys.path.append('..')
-from model import FeatureExtractor, DeepRare, UNIRARE
+from model import DeepRare
+import time
 
 
 if torch.cuda.is_available():
@@ -22,46 +23,6 @@ else:
 
 print("DEFAULT_DEVICE " ,DEFAULT_DEVICE)
 
-
-def load_model(model_name: str):
-    """
-    Charge un modèle CNN PyTorch.
-
-    Args:
-        model_name (str): Nom du modèle pré-entraîné à charger (ex: 'resnet18', 'vgg16').
-        custom_model_path (str, optional): Chemin vers un modèle personnalisé enregistré.
-
-    Returns:
-        torch.nn.Module: Modèle chargé.
-    """
-
-
-    print(f"Chargement du modèle pré-entraîné : {model_name}")
-    if model_name.lower() == "vgg16":
-        model = models.vgg16(pretrained=True)
-    elif model_name.lower() == "mobilenet_v2":
-        model = models.mobilenet_v2(pretrained=True)
-    else:
-        raise ValueError(f"Modèle non supporté : {model_name}")
-
-    model.eval()  # Mettre le modèle en mode évaluation
-    return model
-
-
-def parse_list_of_ints(value: str):
-    """
-    Parse une chaîne de caractères en liste d'entiers.
-
-    Args:
-        value (str): Chaîne de caractères à parser, format attendu: "1,2,3"
-
-    Returns:
-        list[int]: Liste d'entiers.
-    """
-    try:
-        return [int(x) for x in value.split(",")]
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"'{value}' n'est pas une liste d'entiers valide. Format attendu: '1,2,3'")
 
 
 def process_image(image):
@@ -78,20 +39,7 @@ def process_image(image):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Charge un modèle CNN en PyTorch.")
-    parser.add_argument(
-        "--model_name", 
-        type=str, 
-        default="mobilenet_v2", 
-        help="Nom du modèle pré-entraîné à charger (ex: resnet18, vgg16, mobilenet_v2)."
-    )
-
-    parser.add_argument(
-        "--layers_to_extract", 
-        type=parse_list_of_ints, 
-        default="1,2,  4,5,8,  9,11,12,13,  16,17,18,19,  26,27,28,29", 
-        help="Liste d'entiers séparés par des virgules (ex: 1,2,3)."
-    )
+    parser = argparse.ArgumentParser(description="DeepRare")
 
     parser.add_argument(
         "--threshold", 
@@ -100,21 +48,11 @@ if __name__ == "__main__":
         help="Threshold for torch rare 2021"
     )
 
-
     args = parser.parse_args()
-
-    try:
-        model = load_model(args.model_name)
-        print(f"Modèle chargé avec succès : {args.model_name}")
-    except Exception as e:
-        print(f"Erreur lors du chargement du modèle : {e}")
 
 
     rarity_network = DeepRare(
         threshold=args.threshold,
-        model_name=args.model_name,
-        pretrained=True,
-        layers=args.layers_to_extract
     ) # instantiate class
     directory = r'inputs/images/'
 
@@ -132,14 +70,17 @@ if __name__ == "__main__":
         orig_h, orig_w = img.shape[:2]
 
         input_image = process_image(img).to(DEFAULT_DEVICE)
+
+
+        start_time = time.time()
         SAL, groups = rarity_network(input_image)
+        end_time = time.time()
+
+        print(f"Processing time for rarity network: {end_time - start_time:.4f} seconds")
 
 
-        print(groups.shape)
-        print(SAL.shape)
-
-        groups = groups.squeeze(0).detach().cpu().numpy()
-        SAL = SAL.squeeze(0).detach().cpu().numpy()
+        groups = groups.squeeze(0).detach().cpu()
+        SAL = SAL.squeeze(0).detach().cpu()
 
         plt.figure(1)
 
@@ -149,14 +90,14 @@ if __name__ == "__main__":
         plt.title('Initial Image')
 
         plt.subplot(422)
-        plt.imshow(SAL)
+        plt.imshow(SAL.permute(1, 2, 0))
         plt.axis('off')
         plt.title('Final Saliency Map')
 
-        for i in range(0,groups.shape[-1]):
+        for i in range(0,groups.shape[0]):
 
             plt.subplot(423 + i)
-            plt.imshow(groups[:, :, i])
+            plt.imshow(groups[i,:, :])
             plt.axis('off')
             plt.title(f'Level {i}Saliency Map')
 
