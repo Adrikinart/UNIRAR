@@ -48,7 +48,7 @@ class RarityNetwork(nn.Module):
 
     def rarity_tensor(self, channel):
         B,C , a , b = channel.shape
-        if a > 14:  # manage margins for high-level features
+        if a > 10:  # manage margins for high-level features
             channel[:,:,0:1, :] = 0
             channel[:,:,:, a - 1:a] = 0
             channel[:,:,:, 0:1] = 0
@@ -166,39 +166,25 @@ class RarityNetwork(nn.Module):
             self,
             layer_output,
             layers=[
-                [1,2],
-                [4,5],
-                [7,8,9],
-                [11,12,13],
-                [15,16,17]
+                [2,3],
+                [5,6],
+                [8,9,10],
+                [12,13,14],
+                [16,17,18]
             ]
         ):
-        
-        layer1 = self.apply_rarity(layer_output, 1)
-        layer2 = self.apply_rarity(layer_output, 2)
-        layer4 = self.apply_rarity(layer_output, 4)
-        layer5 = self.apply_rarity(layer_output, 5)
-        layer7 = self.apply_rarity(layer_output, 7)
-        layer8 = self.apply_rarity(layer_output, 8)
-        layer9 = self.apply_rarity(layer_output, 9)
-        layer11 = self.apply_rarity(layer_output, 11)
-        layer12 = self.apply_rarity(layer_output, 12)
-        layer13 = self.apply_rarity(layer_output, 13)
-        layer15 = self.apply_rarity(layer_output, 15)
-        layer16 = self.apply_rarity(layer_output, 16)
-        layer17 = self.apply_rarity(layer_output, 17)
 
-        high_level = self.fuse_itti_tensor(torch.stack([layer16, layer17, layer15],dim=1))
-        medium_level2 = self.fuse_itti_tensor(torch.stack([layer12, layer13, layer11], dim=1))
-        medium_level1 = self.fuse_itti_tensor(torch.stack([layer8, layer9, layer7], dim=1))
+        # for i,layer in enumerate(layer_output):
+            # print(f"Layer {i+1}: ",layer.shape)
 
-        low_level2 = self.fuse_itti_tensor(torch.stack([layer4, layer5], dim=1))
-
-        low_level1 = self.fuse_itti_tensor(torch.stack([layer1, layer2], dim=1))
-
-        print("high level shqpe : ",high_level.shape)
-
-        groups= torch.stack([low_level1,low_level2,medium_level1,medium_level2,high_level ], dim=1)
+        groups = []
+        for layers_index in layers:
+            tempo = []
+            for index in layers_index:
+                tempo.append(self.apply_rarity(layer_output, index))
+            tempo = torch.stack(tempo, dim=1)
+            groups.append(self.fuse_itti_tensor(tempo))
+        groups= torch.stack(groups, dim=1)
 
         SAL = groups.sum(dim= 1)
         return SAL, groups
@@ -223,18 +209,6 @@ class BaseModel(nn.Module):
         """Load state_dict from a Trainer checkpoint at a specific epoch"""
         chkpnt = torch.load(directory / f"chkpnt_epoch{epoch:04d}.pth" , map_location = 'cpu' ,  weights_only=True)
         self.load_state_dict(chkpnt["model_state_dict"] , map_location = 'cpu' ,  weights_only=True)
-
-    # def load_checkpoint(self, file):
-    #     """Load state_dict from a specific Trainer checkpoint"""
-    #     """Load """
-    #     chkpnt = torch.load(file)
-    #     self.load_state_dict(chkpnt["model_state_dict"])
-
-    # def load_last_chkpnt(self, directory):
-    #     """Load state_dict from the last Trainer checkpoint"""
-    #     last_chkpnt = sorted(list(directory.glob("chkpnt_epoch*.pth")))[-1]
-    #     self.load_checkpoint(last_chkpnt)
-
 
 class DomainBatchNorm2d(nn.Module):
     """
@@ -371,7 +345,7 @@ class UNIRARE(BaseModel):
         self.cnn = MobileNetV2(**self.cnn_cfg)
 
         # load deep rare model
-        self.deeprare = RarityNetwork(threshold=0.2)
+        self.deeprare = RarityNetwork(threshold=0.8)
 
         # Initialize Post-CNN module with optional dropout
         post_cnn = [

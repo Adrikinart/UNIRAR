@@ -209,8 +209,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--P3Dataset", 
         type=str, 
-        # default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
-        default="C:/Users/lelon/Documents/Dataset/P3_data/", 
+        default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
+        # default="C:/Users/lelon/Documents/Dataset/P3_data/", 
 
         help="path model to load"
     )
@@ -218,8 +218,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--O3Dataset", 
         type=str, 
-        # default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
-        default="C:/Users/lelon/Documents/Dataset/O3_data/", 
+        default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
+        # default="C:/Users/lelon/Documents/Dataset/O3_data/", 
 
         help="path model to load"
     )
