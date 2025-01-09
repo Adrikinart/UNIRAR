@@ -26,7 +26,7 @@ elif torch.backends.mps.is_available():
     DEFAULT_DEVICE = torch.device("mps")
 else:
     DEFAULT_DEVICE = torch.device("cpu")
-# DEFAULT_DEVICE = torch.device("cpu")
+DEFAULT_DEVICE = torch.device("cpu")
 
 print("DEFAULT_DEVICE " ,DEFAULT_DEVICE)
 
@@ -93,89 +93,6 @@ def run_model(model, image, model_name, image_raw):
         saliency_rare = (saliency_rare).astype(np.uint8)
         saliency_fusion_add = (saliency_fusion_add).astype(np.uint8)
         saliency_fusion_rs = (saliency_fusion_rs).astype(np.uint8)
-
-
-        # saliency_fusion_add_color = cv2.applyColorMap(saliency_fusion_add, cv2.COLORMAP_JET)
-        # saliency_fusion_add_color = cv2.cvtColor(saliency_fusion_add_color, cv2.COLOR_BGR2RGB)
-
-        # saliency_fusion_rs_color = cv2.applyColorMap(saliency_fusion_rs, cv2.COLORMAP_JET)
-        # saliency_fusion_rs_color = cv2.cvtColor(saliency_fusion_rs_color, cv2.COLOR_BGR2RGB)
-
-        # saliency_color = cv2.applyColorMap(saliency, cv2.COLORMAP_JET)
-        # saliency_color = cv2.cvtColor(saliency_color, cv2.COLOR_BGR2RGB)
-
-        # saliency_rare_color = cv2.applyColorMap(saliency_rare, cv2.COLORMAP_JET)
-        # saliency_rare_color = cv2.cvtColor(saliency_rare_color, cv2.COLOR_BGR2RGB)
-
-
-        # saliency_color_img = cv2.addWeighted(img, 0.6, saliency_color, 0.4, 0)
-        # saliency_rare_color_img = cv2.addWeighted(img, 0.6, saliency_rare_color, 0.4, 0)
-        # saliency_fusion_add_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_add_color, 0.4, 0)
-        # saliency_fusion_rs_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_rs_color, 0.4, 0)
-
-        # print(saliency_rare_details.shape)
-        # plt.figure(1, figsize=(10,10))
-
-        # plt.subplot(451)
-        # plt.imshow(img)
-        # plt.axis('off')
-        # plt.title('Initial Image')
-
-        # plt.subplot(452)
-        # plt.imshow(saliency_rare_color)
-        # plt.axis('off')
-        # plt.title('saliency_rare')
-
-        # plt.subplot(453)
-        # plt.imshow(saliency_color)
-        # plt.axis('off')
-        # plt.title('saliency')
-
-        # plt.subplot(454)
-        # plt.imshow(saliency_fusion_add_color)
-        # plt.axis('off')
-        # plt.title('fusion_add')
-
-        # plt.subplot(455)
-        # plt.imshow(saliency_fusion_rs_color)
-        # plt.axis('off')
-        # plt.title('fusion_rs')
-
-
-        # plt.subplot(456)
-        # plt.imshow(img)
-        # plt.axis('off')
-        # plt.title('Initial Image')
-
-        # plt.subplot(457)
-        # plt.imshow(saliency_rare_color_img)
-        # plt.axis('off')
-        # plt.title('saliency_rare')
-
-        # plt.subplot(458)
-        # plt.imshow(saliency_color_img)
-        # plt.axis('off')
-        # plt.title('saliency')
-
-        # plt.subplot(459)
-        # plt.imshow(saliency_fusion_add_color_img)
-        # plt.axis('off')
-        # plt.title('fusion_add')
-
-        # plt.subplot(4,5,10)
-        # plt.imshow(saliency_fusion_rs_color_img)
-        # plt.axis('off')
-        # plt.title('fusion_rs')
-
-        # for i in range(0,saliency_rare_details.shape[0]):
-            
-        #     print(i)
-        #     plt.subplot(4,5,11 + i)
-        #     plt.imshow(saliency_rare_details[i,:, :])
-        #     plt.axis('off')
-        #     plt.title(f'Level {i}Saliency Map')
-
-        # plt.show()
 
         # Normalize sal between 0 and 255
         saliency_rare = cv2.normalize(saliency_rare, None, 0, 255, cv2.NORM_MINMAX)
@@ -273,6 +190,9 @@ def run_dataset(dataset_name,dataset, model, model_name, path_folder):
         
         # compute metrics
         index = 1
+
+        result = {}
+
         for k , sal in saliency_images.items():
             if sal is None:
                 continue
@@ -301,10 +221,12 @@ def run_dataset(dataset_name,dataset, model, model_name, path_folder):
             # # compute metrics 
             msr = metrics.compute_msr(sal, targ.squeeze(0).numpy(), dist.squeeze(0).numpy())
 
-        # # Add time process for each image
-        msr['process_time'] = time.time() - start_time_model
-        msr['file_name'] = f"image_result_{i}.png"
-        results.append(msr)
+            # # Add time process for each image
+            msr['process_time'] = time.time() - start_time_model
+            msr['file_name'] = f"image_result_{i}.png"
+            result[k] = msr
+
+        results.append(result)
 
         process_time = time.time() - start_time
         # Print loading bar with FPS information
@@ -352,8 +274,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--P3Dataset", 
         type=str, 
-        # default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
-        default="C:/Users/lelon/Documents/Dataset/P3_data/", 
+        default="/Users/coconut/Documents/Dataset/Saliency/P3_data/", 
+        # default="C:/Users/lelon/Documents/Dataset/P3_data/", 
 
         help="path model to load"
     )
@@ -361,8 +283,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--O3Dataset", 
         type=str, 
-        # default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
-        default="C:/Users/lelon/Documents/Dataset/O3_data/", 
+        default="/Users/coconut/Documents/Dataset/Saliency/O3_data/", 
+        # default="C:/Users/lelon/Documents/Dataset/O3_data/", 
 
         help="path model to load"
     )
