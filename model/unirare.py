@@ -345,7 +345,7 @@ class UNIRARE(BaseModel):
         self.cnn = MobileNetV2(**self.cnn_cfg)
 
         # load deep rare model
-        self.deeprare = RarityNetwork(threshold=0.8)
+        self.deeprare = RarityNetwork(threshold=0.4)
 
         # Initialize Post-CNN module with optional dropout
         post_cnn = [

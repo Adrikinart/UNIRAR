@@ -34,7 +34,7 @@ def post_process(map, img):
     return cv2.resize(map_ , (img.shape[1] , img.shape[0]))
 
 
-def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusion_rs, saliency_rare_details):
+def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusion_rs, saliency_rare_details, targ, dist):
 
     saliency_fusion_add_color = cv2.applyColorMap(saliency_fusion_add, cv2.COLORMAP_JET)
     saliency_fusion_add_color = cv2.cvtColor(saliency_fusion_add_color, cv2.COLOR_BGR2RGB)
@@ -54,6 +54,30 @@ def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusi
 
     saliency_fusion_add_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_add_color, 0.4, 0)
     saliency_fusion_rs_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_rs_color, 0.4, 0)
+
+
+    plt.figure()
+
+    plt.subplot(151)
+    plt.imshow(img)
+    plt.axis('off')
+    plt.title('Initial Image')
+
+    plt.subplot(152)
+    plt.imshow(saliency_rare)
+    plt.axis('off')
+    plt.title('saliency_rare')
+
+
+    plt.subplot(153)
+    plt.imshow(dist)
+    plt.axis('off')
+    plt.title('saliency_rare')
+
+    plt.subplot(154)
+    plt.imshow(targ)
+    plt.axis('off')
+    plt.title('saliency')
 
     plt.figure(figsize=(10,10))
 
@@ -117,12 +141,13 @@ def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusi
 
 
 
-def run_dataset(name,directory, model, args):
+def run_dataset(name,directory, model, args, path_save, show = False):
 
 
     files = os.listdir(directory)
     opener = FileOpener()
     
+    results = []
     start_time_global = time.time()
     for index, filename in enumerate(files):
         go_path = os.path.join(directory, filename)
@@ -132,6 +157,8 @@ def run_dataset(name,directory, model, args):
 
             # open images
             img = cv2.imread(go_path)
+            targ = cv2.imread(go_path.replace("images","targ_labels"),0)
+            dist = cv2.imread(go_path.replace("images","dist_labels"),0)
 
             # open image tensor
             tensor_image = opener.open_image(
@@ -171,25 +198,50 @@ def run_dataset(name,directory, model, args):
             saliency_fusion_add = (saliency_fusion_add).astype(np.uint8)
             saliency_fusion_rs = (saliency_fusion_rs).astype(np.uint8)
 
-            show_images(
-                img,
-                saliency,
-                saliency_rare,
-                saliency_fusion_add,
-                saliency_fusion_rs,
-                saliency_rare_details,
-            )
+            if show:
+                show_images(
+                    img,
+                    saliency,
+                    saliency_rare,
+                    saliency_fusion_add,
+                    saliency_fusion_rs,
+                    saliency_rare_details,
+                    targ,
+                    dist
+                )
 
+            results.append({
+                "filename": filename,
+                'path' : directory,
+                'metrics' : 
+                {
+                    'saliency': metrics.compute_msr(saliency, targ, dist),
+                    'saliency_rare': metrics.compute_msr(saliency_rare, targ, dist),
+                    'saliency_fusion_add': metrics.compute_msr(saliency_fusion_add, targ, dist),
+                    'saliency_fusion_rs': metrics.compute_msr(saliency_fusion_rs, targ, dist),
+
+                }
+            })
+
+        # Print loading bar with FPS information
+        process_time_global = time.time() - start_time_global
 
         total = len(files)
         progress = (index + 1) / total
         bar_length = 40
         block = int(round(bar_length * progress))
-        text = f"\rProgress: [{'#' * block + '-' * (bar_length - block)}] {progress * 100:.2f}% | {index}/{total} | Time: {process_time:.4f}s"
+        fps = (index + 1) / process_time_global
+        text = f"\rProgress: [{'#' * block + '-' * (bar_length - block)}] {progress * 100:.2f}% | FPS: {fps:.2f} | {index}/{total} | Time: {process_time:.4f}s"
         sys.stdout.write(text)
         sys.stdout.flush()
 
+    # Save results as JSON file
+    print()
+    results_path = os.path.join(path_save, f"{name}_results.json")
+    with open(results_path, 'w') as f:
+        json.dump(results, f, indent=4)
 
+    print(f"Results saved to {results_path}")
 
 if __name__ == "__main__":
 
@@ -232,9 +284,39 @@ if __name__ == "__main__":
         else:
             print("Model not found")
 
+    # Create folder in "../res" with name unirare and args information
+    if args.finetune.lower() == "true":
+        res_dir = os.path.join("..", "res", f"unirare_finetune_{args.type}")
+    else:
+        res_dir = os.path.join("..", "res", f"unirare_{args.type}")
+    os.makedirs(res_dir, exist_ok=True)
+    print(f"Results will be saved in {res_dir}")
+
     run_dataset(
-        name= "test" ,
-        directory = "inputs/images" , 
+        name= "O3_data" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/O3_data/images/" , 
         model= model,
         args= args,
+        path_save= res_dir
+    )
+    run_dataset(
+        name= "P3_data_sizes" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/sizes/images/" , 
+        model= model,
+        args= args,
+        path_save= res_dir
+    )
+    run_dataset(
+        name= "P3_data_orientations" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/orientations/images/" , 
+        model= model,
+        args= args,
+        path_save= res_dir
+    )
+    run_dataset(
+        name= "P3_data_colors" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/colors/images/" , 
+        model= model,
+        args= args,
+        path_save= res_dir
     )

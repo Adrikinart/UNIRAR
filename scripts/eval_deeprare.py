@@ -52,18 +52,21 @@ def show_images(img, saliency_rare, saliency_rare_details):
 
     plt.show()
 
-def run_dataset(name,directory, model):
+def run_dataset(name,directory, model, args, path_save, show = False):
 
 
     files = os.listdir(directory)
     opener = FileOpener()
     
+    results = []
     start_time_global = time.time()
     for index, filename in enumerate(files):
         go_path = os.path.join(directory, filename)
 
         # open images
         img = cv2.imread(go_path)
+        targ = cv2.imread(go_path.replace("images","targ_labels"),0)
+        dist = cv2.imread(go_path.replace("images","dist_labels"),0)
 
         # open image tensor
         tensor_image = opener.open_image(
@@ -87,11 +90,21 @@ def run_dataset(name,directory, model):
 
         saliency_rare = (saliency_rare).astype(np.uint8)
 
-        show_images(
-            img,
-            saliency_rare,
-            saliency_rare_details,
-        )
+        if show:
+            show_images(
+                img,
+                saliency_rare,
+                saliency_rare_details,
+            )
+
+        results.append({
+            "filename": filename,
+            'path' : directory,
+            'metrics' : 
+            {
+                'saliency_rare': metrics.compute_msr(saliency_rare, targ, dist),
+            }
+        })
 
         # Print loading bar with FPS information
         process_time_global = time.time() - start_time_global
@@ -100,9 +113,20 @@ def run_dataset(name,directory, model):
         progress = (index + 1) / total
         bar_length = 40
         block = int(round(bar_length * progress))
-        text = f"\rProgress: [{'#' * block + '-' * (bar_length - block)}] {progress * 100:.2f}% | {index}/{total} | Time: {process_time:.4f}s"
+        fps = (index + 1) / process_time_global
+        text = f"\rProgress: [{'#' * block + '-' * (bar_length - block)}] {progress * 100:.2f}% | FPS: {fps:.2f} | {index}/{total} | Time: {process_time:.4f}s"
         sys.stdout.write(text)
         sys.stdout.flush()
+
+
+    # Save results as JSON file
+    print()
+    results_path = os.path.join(path_save, f"{name}_results.json")
+    with open(results_path, 'w') as f:
+        json.dump(results, f, indent=4)
+
+    print(f"Results saved to {results_path}")
+
 
 
 
@@ -122,8 +146,40 @@ if __name__ == "__main__":
         threshold=args.threshold,
     ).to(DEFAULT_DEVICE) # instantiate class
 
+    if args.threshold is None:
+        res_dir = os.path.join("..", "res", f"deeprare_noThreshold")
+    else:
+        res_dir = os.path.join("..", "res", f"deeprare_{args.threshold}")
+
+
+    os.makedirs(res_dir, exist_ok=True)
+    print(f"Results will be saved in {res_dir}")
+
     run_dataset(
-        name= "test innputs" ,
-        directory = "./inputs/images/" , 
+        name= "O3_data" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/O3_data/images/" , 
         model= model,
+        args= args,
+        path_save= res_dir
+    )
+    run_dataset(
+        name= "P3_data_sizes" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/sizes/images/" , 
+        model= model,
+        args= args,
+        path_save= res_dir
+    )
+    run_dataset(
+        name= "P3_data_orientations" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/orientations/images/" , 
+        model= model,
+        args= args,
+        path_save= res_dir
+    )
+    run_dataset(
+        name= "P3_data_colors" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/colors/images/" , 
+        model= model,
+        args= args,
+        path_save= res_dir
     )
