@@ -40,11 +40,9 @@ def log_softmax(x):
 
 
 class RarityNetwork(nn.Module):
-
     def __init__(self, threshold= None):
         super(RarityNetwork, self).__init__()
         self.threshold= threshold
-    
 
     def rarity_tensor(self, channel):
         B,C , a , b = channel.shape

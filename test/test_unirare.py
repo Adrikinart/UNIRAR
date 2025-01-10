@@ -117,7 +117,7 @@ def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusi
     output_dir = "./outputs/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    output_path = os.path.join(output_dir, f"deeprare_finetune_{args.finetune.lower()}_threshold_{args.threshold}_{index}.jpeg")
+    output_path = os.path.join(output_dir, f"image_{index}_deeprare_finetune_{args.finetune.lower()}_threshold_{args.threshold}.jpeg")
     plt.savefig(output_path)
 
     plt.show()

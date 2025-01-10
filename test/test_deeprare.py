@@ -54,15 +54,12 @@ def show_images(img, saliency_rare, saliency_rare_details, threshold , index):
     output_dir = "./outputs/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    output_path = os.path.join(output_dir, f"deeprare_threshold_{threshold}_{index}.jpeg")
+    output_path = os.path.join(output_dir, f"image_{index}_deeprare_threshold_{threshold}.jpeg")
     plt.savefig(output_path)
-
     plt.show()
 
 
 def run_dataset(name,directory, model, args):
-
-
     files = os.listdir(directory)
     opener = FileOpener()
     
