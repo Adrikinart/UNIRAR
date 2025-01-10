@@ -34,7 +34,7 @@ def post_process(map, img):
     return cv2.resize(map_ , (img.shape[1] , img.shape[0]))
 
 
-def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusion_rs, saliency_rare_details):
+def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusion_rs, saliency_rare_details,args ,index):
 
     saliency_fusion_add_color = cv2.applyColorMap(saliency_fusion_add, cv2.COLORMAP_JET)
     saliency_fusion_add_color = cv2.cvtColor(saliency_fusion_add_color, cv2.COLOR_BGR2RGB)
@@ -68,8 +68,8 @@ def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusi
     plt.title('saliency_rare')
 
     plt.subplot(453)
-    plt.imshow(saliency_color)
     plt.axis('off')
+    plt.imshow(saliency_color)
     plt.title('saliency')
 
     plt.subplot(454)
@@ -113,8 +113,14 @@ def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusi
         plt.axis('off')
         plt.title(f'Level {i}Saliency Map')
 
-    plt.show()
 
+    output_dir = "./outputs/"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    output_path = os.path.join(output_dir, f"deeprare_finetune_{args.finetune.lower()}_threshold_{args.threshold}_{index}.jpeg")
+    plt.savefig(output_path)
+
+    plt.show()
 
 
 def run_dataset(name,directory, model, args):
@@ -178,6 +184,8 @@ def run_dataset(name,directory, model, args):
                 saliency_fusion_add,
                 saliency_fusion_rs,
                 saliency_rare_details,
+                args,
+                index
             )
 
 
@@ -201,6 +209,12 @@ if __name__ == "__main__":
         help="image or video"
     )
 
+    parser.add_argument(
+        "--threshold", 
+        type=float, 
+        default=None, 
+        help="Threshold for torch rare 2021"
+    )
 
     parser.add_argument(
         "--source", 
@@ -222,6 +236,7 @@ if __name__ == "__main__":
     # create model unirare
     model = UNIRARE(
         bypass_rnn=False,
+        threshold=args.threshold
     ).to(DEFAULT_DEVICE)
 
     if args.finetune.lower() == "true":

@@ -269,11 +269,19 @@ if __name__ == "__main__":
         choices = ["true", "false"]
     )
 
+    parser.add_argument(
+        "--threshold", 
+        type=float, 
+        default=None, 
+        help="Threshold for torch rare 2021"
+    )
+
     args = parser.parse_args()
 
     # create model unirare
     model = UNIRARE(
         bypass_rnn=False,
+        threshold=args.threshold
     ).to(DEFAULT_DEVICE)
 
     if args.finetune.lower() == "true":
@@ -286,9 +294,9 @@ if __name__ == "__main__":
 
     # Create folder in "../res" with name unirare and args information
     if args.finetune.lower() == "true":
-        res_dir = os.path.join("..", "res", f"unirare_finetune_{args.type}")
+        res_dir = os.path.join("..", "res", f"unirare_finetune_threshold_{args.threshold}_{args.type}")
     else:
-        res_dir = os.path.join("..", "res", f"unirare_{args.type}")
+        res_dir = os.path.join("..", "res", f"unirare_threshold_{args.threshold}_{args.type}")
     os.makedirs(res_dir, exist_ok=True)
     print(f"Results will be saved in {res_dir}")
 

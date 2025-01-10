@@ -28,7 +28,7 @@ else:
 print("DEFAULT_DEVICE " ,DEFAULT_DEVICE)
 
 
-def show_images(img, saliency_rare, saliency_rare_details):
+def show_images(img, saliency_rare, saliency_rare_details, threshold , index):
     plt.figure(1)
 
     plt.subplot(421)
@@ -50,9 +50,17 @@ def show_images(img, saliency_rare, saliency_rare_details):
         plt.axis('off')
         plt.title(f'Level {i}Saliency Map')
 
+
+    output_dir = "./outputs/"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    output_path = os.path.join(output_dir, f"deeprare_threshold_{threshold}_{index}.jpeg")
+    plt.savefig(output_path)
+
     plt.show()
 
-def run_dataset(name,directory, model):
+
+def run_dataset(name,directory, model, args):
 
 
     files = os.listdir(directory)
@@ -91,6 +99,8 @@ def run_dataset(name,directory, model):
             img,
             saliency_rare,
             saliency_rare_details,
+            args.threshold,
+            index
         )
 
         # Print loading bar with FPS information
@@ -126,4 +136,5 @@ if __name__ == "__main__":
         name= "test innputs" ,
         directory = "./inputs/images/" , 
         model= model,
+        args= args
     )

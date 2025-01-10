@@ -166,11 +166,11 @@ class RarityNetwork(nn.Module):
             self,
             layer_output,
             layers=[
-                [2,3],
-                [5,6],
+                [2,3,4],
+                [5,6,7],
                 [8,9,10],
                 [12,13,14],
-                [16,17,18]
+                [16,17,18,19]
             ]
         ):
 
@@ -300,7 +300,7 @@ class UNIRARE(BaseModel):
         ds_smoothing=True,
         ds_gaussians=True,
         verbose=1,
-        layers = [6,7, 12,13,14,  16,17,18]
+        threshold= None
     ):
         super().__init__()
 
@@ -339,13 +339,12 @@ class UNIRARE(BaseModel):
         self.ds_smoothing = ds_smoothing
         self.ds_gaussians = ds_gaussians
         self.verbose = verbose
-        self.layers = layers
 
         # Initialize backbone CNN
         self.cnn = MobileNetV2(**self.cnn_cfg)
 
         # load deep rare model
-        self.deeprare = RarityNetwork(threshold=0.4)
+        self.deeprare = RarityNetwork(threshold=threshold)
 
         # Initialize Post-CNN module with optional dropout
         post_cnn = [
