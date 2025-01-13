@@ -1,323 +1,296 @@
 import numpy as np
+from numpy import expand_dims
+
+import torch
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as T
+import torchvision.transforms as transforms
 import torchvision.models as models
-import matplotlib.pyplot as plt
 
-class FeatureExtractor(nn.Module):
-    def __init__(self, model, layer_indices):
-        """
-        Initialize the feature extractor.
-
-        Args:
-            model: The pre-trained model (e.g., VGG16).
-            layer_indices: List of indices of layers to extract features from.
-        """
-        super(FeatureExtractor, self).__init__()
+# Define a function to get the outputs from all layers
+class IntermediateLayerGetter(nn.Module):
+    def __init__(self, model, layer_names):
+        super(IntermediateLayerGetter, self).__init__()
         self.model = model
-        self.layer_indices = layer_indices
-    
+        self.layer_names = layer_names
+        self.outputs = []
+
     def forward(self, x):
-        features = []
-        for idx, layer in enumerate(self.model.features):
+        self.outputs = []
+        for name, layer in self.model.features._modules.items():
             x = layer(x)
-            if idx in self.layer_indices:
-                features.append(x)
-        return features
-
-import time
-class DeepRare(nn.Module):
-    def __init__(
-            self,
-            threshold= None,
-            model_name='mobilenet_v2',
-            pretrained=True,
-            layers=[1,2,  4,5,8,  9,11,12,13,  16,17,18,19,  26,27,28,29]
-        ):
-        """
-        Constructor for the DeepRare model.
-        """
-        super(DeepRare, self).__init__()
-        self.threshold = threshold
-
-        print(f"Chargement du modèle pré-entraîné : {model_name}")
-        if model_name.lower() == "vgg16":
-            self.model = models.vgg16(pretrained=pretrained)
-        elif model_name.lower() == "mobilenet_v2":
-            self.model = models.mobilenet_v2(pretrained=pretrained)
-        else:
-            raise ValueError(f"Modèle non supporté : {model_name}")
-        
-        self.model.eval()
-        self.feature_extractor = FeatureExtractor(self.model, layers)
-
-        self.rarity = RarityNetwork()
-        
-    def forward(self, input_image):
-            """
-            Forward pass to process feature maps.
-
-            Args:
-                input_image (torch.Tensor): Input image tensor.
-
-            Returns:
-                torch.Tensor: Fused saliency map.
-                torch.Tensor: Stacked feature maps.
-            """
-            target_size = input_image.shape[-2:]
-
-            layer_output = self.feature_extractor(input_image)
-            return self.rarity(layer_output, target_size)
+            if name in self.layer_names:
+                self.outputs.append(x)
+        return self.outputs
+    
 class RarityNetwork(nn.Module):
-    """
-    DeepRare2019 Class.
-    """
 
-    def __init__(
-            self,
-            threshold= None,
-            layers=[1,2,  4,5,8,  9,11,12,13,  16,17,18,19,  26,27,28,29]
-        ):
-        """
-        Constructor for the DeepRare model.
-        """
+    def __init__(self, threshold= None):
         super(RarityNetwork, self).__init__()
-        self.threshold = threshold
+        self.threshold= threshold
+    
 
-    @staticmethod
-    def tensor_resize(tensor, size=(240, 240)):
-        """
-        Resize a tensor to the specified size using bilinear interpolation.
+    def rarity_tensor(self, channel):
+        B,C , a , b = channel.shape
+        if a > 50:  # manage margins for low-level features
+            channel[:,:,0:3, :] = 0
+            channel[:,:,:, a - 3:a] = 0
+            channel[:,:,:, 0:3] = 0
+            channel[:,:,b - 3:b, :] = 0
+        if a == 28:  # manage margins for mid-level features
+            channel[:,:,0:2, :] = 0
+            channel[:,:,:, a - 2:a] = 0
+            channel[:,:,:, 0:2] = 0
+            channel[:,:,b - 2:b, :] = 0
+        if a == 14:  # manage margins for high-level features
+            channel[:,:,0:1, :] = 0
+            channel[:,:,:, a - 1:a] = 0
+            channel[:,:,:, 0:1] = 0
+            channel[:,:,b - 1:b, :] = 0
 
-        Args:
-            tensor (torch.Tensor): Input tensor.
-            size (tuple): Desired output size (height, width).
-
-        Returns:
-            torch.Tensor: Resized tensor.
-        """
-
-        if tensor.dim() == 2:
-            tensor = tensor.unsqueeze(0).unsqueeze(0)  # Add batch dimension if missing
-        if tensor.dim() == 3:
-            tensor = tensor.unsqueeze(0)  # Add batch dimension if missing
-        elif tensor.dim() != 4:
-            raise ValueError("Input tensor must have 3 or 4 dimensions")
         
-        tensor=  F.interpolate(tensor, size=size, mode="bilinear", align_corners=False).squeeze(0)
+        channel = channel.view(B,C, -1)
+        tensor_min = channel.min(dim=2, keepdim=True)[0]
+        tensor_max = channel.max(dim=2, keepdim=True)[0]
+        channel = (channel - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        channel = channel * 256
 
-        return tensor
+        bins = 11
 
-    @staticmethod
-    def normalize_tensor(tensor, min_val=0, max_val=1):
-        """
-        Normalize a tensor to the specified range [min_val, max_val].
+        min_val, max_val = channel.min(), channel.max()
+        bin_edges = torch.linspace(min_val, max_val, steps=bins + 1, device=channel.device)
 
-        Args:
-            tensor (torch.Tensor): Input tensor.
-            min_val (float): Minimum value of the normalized range.
-            max_val (float): Maximum value of the normalized range.
+        bin_indices = torch.bucketize(channel, bin_edges, right=True) - 1
+        bin_indices = bin_indices.clamp(0, bins - 1)
 
-        Returns:
-            torch.Tensor: Normalized tensor.
-        """
-        tensor_min = tensor.min()
-        tensor_max = tensor.max()
-        if tensor_max - tensor_min == 0:
-            return torch.zeros_like(tensor)
-        return ((tensor - tensor_min) / (tensor_max - tensor_min)) * (max_val - min_val) + min_val
-    
-    
-    def map_ponderation(self, tensor):
-        """
-        Apply weighting to a tensor map based on its rarity.
+        histograms = torch.zeros((B,C, bins), device=channel.device)
+        histograms.scatter_add_(2, bin_indices, torch.ones_like(bin_indices, dtype=torch.float, device=channel.device))    
 
-        Args:
-            tensor (torch.Tensor): Input tensor map.
+        histograms = histograms / histograms.sum(dim=2, keepdim=True)
+        histograms = -torch.log(histograms + 1e-4)
+        hists_idx = ((channel/256.) * (bins - 1)).long().clamp(0, bins - 1)
 
-        Returns:
-            torch.Tensor: Weighted tensor map.
-        """
-        map_max = tensor.max()
-        map_mean = tensor.mean()
-        map_weight = (map_max - map_mean) ** 2
-        return self.normalize_tensor(tensor, min_val=0, max_val=1) * map_weight
-    
-    def map_ponderation_tensor(self,tensor):
-        """
-        Apply weighting to a tensor map based on its rarity for each channel independently.
+        dst = histograms.gather(2, hists_idx)
 
-        Args:
-            tensor (torch.Tensor): Input tensor of shape [C, W].
-
-        Returns:
-            torch.Tensor: Weighted tensor map of shape [C, W].
-        """
-        map_max = tensor.max(dim=1, keepdim=True)[0]
-        map_mean = tensor.mean(dim=1, keepdim=True)
-        map_weight = (map_max - map_mean) ** 2
-
-        tensor_min = tensor.min(dim=1, keepdim=True)[0]
-        tensor_max = tensor.max(dim=1, keepdim=True)[0]
-        normalized_tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
-
-        return normalized_tensor * map_weight
-
-    def fuse_itti(self, maps):
-        """
-        Perform Itti-like fusion of maps.
-
-        Args:
-            maps (list[torch.Tensor]): List of input maps to fuse.
-
-        Returns:
-            torch.Tensor: Fused map.
-        """
-
-        fused_map = torch.zeros_like(maps[0])
-        for feature_map in maps:
-            fused_map += self.map_ponderation(feature_map)
-        return fused_map
-
-
-    def rarity(self, feature_maps, bins=6):
-        """
-        Compute the single-resolution rarity for a given data.
-
-        Args:
-            data (torch.Tensor): Input data of shape [B, C, W, H].
-            bins (int): Number of bins for histogram computation.
-
-        Returns:
-            torch.Tensor: Rarity map.
-        """
-
-        B, C, W, H = feature_maps.shape
-
-        batchs= []
-
-        for bidx in range(B):
-
-            feature_maps_histo_batch = feature_maps[bidx, :, :, :]
-
-            feature_maps_histo_batch[:, :1, :] = 0
-            feature_maps_histo_batch[:, :, :1] = 0
-            feature_maps_histo_batch[:, W - 1:, :] = 0
-            feature_maps_histo_batch[:, :, H - 1:] = 0
-            feature_maps_histo_batch = feature_maps_histo_batch.view(C, -1)
-
-
-            tensor_min = feature_maps_histo_batch.min(dim=1, keepdim=True)[0]
-            tensor_max = feature_maps_histo_batch.max(dim=1, keepdim=True)[0]
-            feature_maps_histo_batch = (feature_maps_histo_batch - tensor_min) / (tensor_max - tensor_min + 1e-8)
-            feature_maps_histo_batch = feature_maps_histo_batch * 256
-
-
-            min_val, max_val = feature_maps_histo_batch.min(), feature_maps_histo_batch.max()
-            bin_edges = torch.linspace(min_val, max_val, steps=bins + 1, device=feature_maps_histo_batch.device)
-
-            bin_indices = torch.bucketize(feature_maps_histo_batch, bin_edges, right=True) - 1
-
-            bin_indices = bin_indices.clamp(0, bins - 1)
-
-            histograms = torch.zeros((feature_maps_histo_batch.size(0), bins), device=feature_maps_histo_batch.device)
-            histograms.scatter_add_(1, bin_indices, torch.ones_like(bin_indices, dtype=torch.float, device=feature_maps_histo_batch.device))    
-
-            histograms = histograms / histograms.sum(dim=1, keepdim=True)
-            histograms = -torch.log(histograms + 1e-4)
-            hists_idx = ((feature_maps_histo_batch * bins - 1).long().clamp(0, bins - 1))
-            channels = histograms.gather(1, hists_idx)
-
-            tensor_min = channels.min(dim=1, keepdim=True)[0]
-            tensor_max = channels.max(dim=1, keepdim=True)[0]
-            channels = (channels - tensor_min) / (tensor_max - tensor_min + 1e-8)
-
-            channels = self.map_ponderation_tensor(channels)
-
-            hists_idx = hists_idx.view(C, H, W)
-            channels = channels.view(C, H, W)
-
-            channels[:,:1, :] = 0
-            channels[:,:, :1] = 0
-            channels[:,-1:, :] = 0
-            channels[:,:, -1:] = 0
-        
-            channels = channels.view(C,-1)
-            channels = self.map_ponderation_tensor(channels)
-
-            channels= channels.sum(dim=0)
-
-            tensor_min = channels.min(dim=0, keepdim=True)[0]
-            tensor_max = channels.max(dim=0, keepdim=True)[0]
-            channels = (channels - tensor_min) / (tensor_max - tensor_min + 1e-8)
-            
-            batchs.append(channels.view(H, W))
-
-        return torch.stack(batchs, dim=0)
-    
-
-    def apply_rarity(self, layer_output):
-        """
-        Apply rarity computation to all feature maps in a layer.
-
-        Args:
-            layer_output (torch.Tensor): Feature maps of shape [B, C, H, W].
-            threshold (float): Threshold to filter low-rarity values.
-
-        Returns:
-            torch.Tensor: Processed feature map.
-        """
-        processed_map = self.rarity(layer_output.clone())
+        tensor_min = dst.min(dim=2, keepdim=True)[0]
+        tensor_max = dst.max(dim=2, keepdim=True)[0]
+        dst = (dst - tensor_min) / (tensor_max - tensor_min + 1e-8)
 
         if self.threshold is not None:
-            processed_map[processed_map < self.threshold] = 0
+            dst[dst < self.threshold] = 0
+
+        map_max = dst.max(dim=2, keepdim=True)[0]
+        map_mean = dst.mean(dim=2, keepdim=True)
+        map_weight = (map_max - map_mean) ** 2  # Itti-like weight
+        dst = dst * map_weight
+
+        dst = torch.pow(dst, 2)
+        ma = dst.max(dim=2, keepdim=True)[0]
+        me = dst.mean(dim=2, keepdim=True)
+        w = (ma - me) * (ma - me)
+        dst = w * dst
+
+        tensor_min = dst.min(dim=2, keepdim=True)[0]
+        tensor_max = dst.max(dim=2, keepdim=True)[0]
+        dst = (dst - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        dst = dst.view(B,C, a,b)
+
+        if a > 50:
+            dst[:,:,0:3, :] = 0
+            dst[:,:,:, a - 3:a] = 0
+            dst[:,:,:, 0:3] = 0
+            dst[:,:,b - 3:b, :] = 0
+        if a == 28:
+            dst[:,:,0:2, :] = 0
+            dst[:,:,:, a - 2:a] = 0
+            dst[:,:,:, 0:2] = 0
+            dst[:,:,b - 2:b, :] = 0
+        if a == 14:
+            dst[:,:,0:2, :] = 0
+            dst[:,:,:, a - 2:a] = 0
+            dst[:,:,:, 0:2] = 0
+            dst[:,:,b - 2:b, :] = 0
+        if a < 14:
+            dst[:,:,0:2, :] = 0
+            dst[:,:,:, a - 2:a] = 0
+            dst[:,:,:, 0:2] = 0
+            dst[:,:,b - 2:b, :] = 0
+
+        dst = dst.view(B,C, -1)
+        dst = torch.pow(dst, 2)
+        ma = dst.max(dim=2, keepdim=True)[0]
+        me = dst.mean(dim=2, keepdim=True)
+        w = (ma - me) * (ma - me)
+        dst = w * dst
+
+        return dst.view(B,C, a,b)
 
 
-        # add fuse itti 
+    def apply_rarity(self, layer_output, layer_ind):
+        features_processed = self.rarity_tensor(layer_output[layer_ind - 1])
+        features_processed =features_processed.sum(dim=1)
+        return F.interpolate(features_processed.clone().unsqueeze(0), (240,240), mode='bilinear', align_corners=False).squeeze(0)
 
-        # normalize tensor
+    def fuse_itti_tensor(self, tensor):
+        # Itti-like fusion between two maps
+        B, C , W , H = tensor.shape
+        tensor= tensor.view(B, C, -1)
 
-        # add resize
+        # Normalize 0 1
+        tensor_min = tensor.min(dim=2, keepdim=True)[0]
+        tensor_max = tensor.max(dim=2, keepdim=True)[0]
+        tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
 
-        return processed_map
+        # Compute Weights
+        tensor_max = tensor.max(dim=2, keepdim=True)[0]
+        tensor_mean = tensor.mean(dim=2, keepdim=True)
+        w1 = torch.square(tensor_max - tensor_mean)
+        tensor = w1 * tensor
+        tensor= tensor.sum(dim=1)
 
-    def forward(self, layer_output, target_size):
-        """
-        Forward pass to process feature maps.
+        # normalize 0 255
+        tensor_min = tensor.min(dim=1, keepdim=True)[0]
+        tensor_max = tensor.max(dim=1, keepdim=True)[0]
+        tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        tensor *= 255
 
-        Args:
-            layer_output (torch.Tensor): Input layers.
+        return tensor.view(B,W,H)
+    
+    def forward(self, layer_output):
+        layer1 = self.apply_rarity(layer_output, 1)
+        layer2 = self.apply_rarity(layer_output, 2)
+        layer4 = self.apply_rarity(layer_output, 4)
+        layer5 = self.apply_rarity(layer_output, 5)
+        layer7 = self.apply_rarity(layer_output, 11)
+        layer8 = self.apply_rarity(layer_output, 12)
+        layer9 = self.apply_rarity(layer_output, 13)
+        layer11 = self.apply_rarity(layer_output, 18)
+        layer12 = self.apply_rarity(layer_output, 19)
+        layer13 = self.apply_rarity(layer_output, 20)
+        layer15 = self.apply_rarity(layer_output, 28)
+        layer16 = self.apply_rarity(layer_output, 29)
+        layer17 = self.apply_rarity(layer_output, 30)
 
-        Returns:
-            torch.Tensor: Fused saliency map.
-            torch.Tensor: Stacked feature maps.
-        """
+        high_level = self.fuse_itti_tensor(torch.stack([layer16, layer17, layer15],dim=1))
+        medium_level2 = self.fuse_itti_tensor(torch.stack([layer12, layer13, layer11], dim=1))
+        medium_level1 = self.fuse_itti_tensor(torch.stack([layer8, layer9, layer7], dim=1))
+        low_level2 = self.fuse_itti_tensor(torch.stack([layer4, layer5], dim=1))
 
-        packs = []
-        for layer in layer_output:
-            added = next((pack for pack in packs if pack[0].shape[-2:] == layer.shape[-2:]), None)
-            if added:
-                added.append(layer)
-            else:
-                packs.append([layer])
+        low_level1 = self.fuse_itti_tensor(torch.stack([layer1, layer2], dim=1))
 
-        fused_maps = [] 
-        for pack in packs:
+        groups= torch.stack([low_level1,low_level2,medium_level1,medium_level2,high_level ], dim=1)
 
-            
+        SAL = groups.sum(dim= 1)
+        return SAL, groups
 
-            processed_layers = [
-            self.tensor_resize(self.apply_rarity(features), target_size)
-            for features in pack
-            ]
 
-            fused_map = self.normalize_tensor(self.fuse_itti(processed_layers), min_val=0, max_val=256)
+class DeepRareTorch(nn.Module):
+    def __init__(self, threshold= 0.6):
+        super(DeepRareTorch, self).__init__()
+        # Load the VGG16 model
 
-            fused_maps.append(fused_map)
+        self.model = models.vgg16(pretrained=True)
+        self.model.eval()
+        self.threshold= threshold
 
-        fused_maps = torch.stack(fused_maps, dim=-1)
-        result = fused_maps.sum(dim=-1)
 
-        return result, fused_maps
+        self._face = (
+            0
+        )  # by default large faces detector is used
+        self._margin = (
+            0
+        )  # by default additional margins are not added for images (good for classical images)
+
+        self.rarity_network= RarityNetwork(threshold= self.threshold)
+
+    def _get_margin(self):
+        """Read width"""
+        return self._margin
+
+    def _set_margin(self, new_margin):
+        """Modify witdh"""
+        self._margin = new_margin
+
+    margin = property(_get_margin, _set_margin)
+
+    def _get_face(self):
+        """Read width"""
+        return self._face
+
+    def _set_face(self, new_face):
+        """Modify witdh"""
+        self._face = new_face
+
+    face = property(_get_face, _set_face)
+
+    def forward(
+            self,
+            img_tensor,
+            target_size= None,
+        ):
+
+        B,C,W,H = img_tensor.shape
+        if target_size is None:
+            target_size= (W,H)
+
+        # prepare margins
+        if self.margin == 1:
+            img_tensor = F.interpolate(img_tensor, size=(168, 168), mode='bilinear', align_corners=False)
+            img_tensor = F.pad(img_tensor, (28, 28, 28, 28), mode='circular')
+
+        if self.margin == 0:
+            img_tensor = F.interpolate(img_tensor, size=(224, 224), mode='bilinear', align_corners=False)
+
+        # Get the outputs from all layers
+        layer_names = [str(i) for i in range(1, 31)]  # Layers 1 to 17
+        intermediate_layer_getter = IntermediateLayerGetter(self.model, layer_names)
+        with torch.no_grad():
+            layer_outputs = intermediate_layer_getter(img_tensor)
+
+        SAL1, groups1 = self.rarity_network(layer_outputs)
+
+        # # add face if needed
+        # if self.face == 1:
+        #     face_layer = self.get_faces(layer_outputs, 15)
+        #     face_resize = cv2.resize(face_layer, (240, 240))
+
+
+
+        #     if self.margin == 1:
+        #         SAL = cv2.resize( SAL1 + face_resize, (224, 224))
+        #         SAL = SAL[30:195, 30:195]
+
+        #     if self.margin == 0:
+        #         SAL = SAL1 + face_resize
+
+
+        # if self.face == 0:
+        if self.margin == 1:
+            SAL = F.interpolate(SAL1, size=(224, 224), mode='bilinear', align_corners=False)
+            SAL = SAL[30:195, 30:195]
+
+        if self.margin == 0:
+            SAL = SAL1
+
+        SAL = F.interpolate(SAL.unsqueeze(0), size=target_size, mode='bilinear', align_corners=False).squeeze(0)
+
+        B,W,H= SAL.shape
+        SAL= SAL.view(B,-1)
+        tensor_min = SAL.min(dim=1, keepdim=True)[0]
+        tensor_max = SAL.max(dim=1, keepdim=True)[0]
+        SAL = (SAL - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        SAL= SAL.view(B,-1,W,H)
+
+
+        groups1 = F.interpolate(groups1, size=target_size, mode='bilinear', align_corners=False)
+
+        # face_resize = cv2.resize(face_resize, (orig_w, orig_h), interpolation=cv2.INTER_CUBIC)
+
+        return SAL, groups1 #return saliency, groups and face

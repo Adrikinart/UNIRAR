@@ -149,7 +149,7 @@ def compute_msr(salmap, targmap, distmap):
 
     msrt = MSR_targ(salmap,targmap,distmap)
     msrb = MSR_bg(salmap,targmap,distmap)
-    return {'msrt':msrt, 'msrb':msrb}
+    return {'msrt':round(msrt,4), 'msrb':round(msrb,4)}
 
 
 def MSR_targ(salmap, targmap, distmap, dilate=0, add_eps=False):

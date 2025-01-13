@@ -1,5 +1,3 @@
 from . import MobileNetV2
-from .unisal import UNISAL
-from .deeprare import DeepRare, RarityNetwork
-from .features_extractor import FeatureExtractor
+from .deeprare import DeepRareTorch as DeepRare
 from .unirare import UNIRARE
