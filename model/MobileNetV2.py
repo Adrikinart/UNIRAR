@@ -193,7 +193,7 @@ class MobileNetV2(nn.Module):
             )
             self.load_state_dict(state_dict, strict=False)
 
-    def forward(self, x, layers = [6,7, 12,13,14,  16,17,18]):
+    def forward(self, x, layers=False):
 
         feat_2x, feat_4x, feat_8x = None, None, None
         layers_output = []
@@ -209,15 +209,10 @@ class MobileNetV2(nn.Module):
                 x = x[..., ::2, ::2]
 
 
-            if layers is None:
-                continue
 
-            if idx not in layers:
-                continue
-            # print(" - index , " , idx , " " , x.shape)
             layers_output.append(x)
         
-        if layers is None:
+        if layers  == False:
             return x, feat_2x, feat_4x
 
         return x, feat_2x, feat_4x, layers_output

@@ -262,3 +262,4 @@ if __name__ == "__main__":
     result_filename = f"results_{args.model}_{args.type}.json"
     with open("../res/" + result_filename, 'w') as f:
         json.dump(results, f, indent=4)
+

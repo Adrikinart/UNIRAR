@@ -35,7 +35,7 @@ class P3Dataset(Dataset):
         self.target_size = target_size
 
         self.load_data()
-        random.shuffle(self.data)
+        # random.shuffle(self.data)
 
     def load_data(self):
         self.data = []
@@ -43,7 +43,6 @@ class P3Dataset(Dataset):
             for i, line in enumerate(f):
                 if i == 0:
                     continue
-                
                 file_name = line.split(",")[1]
                 if os.path.isfile(self.dist_dir / file_name) == False:
                     continue
@@ -95,7 +94,7 @@ class P3Dataset(Dataset):
         targ = self.preprocess(self.get_target(img_idx), out_size=self.target_size, data='sal') * 255
         dist = self.preprocess(self.get_dist(img_idx), out_size=self.target_size, data='fix') * 255
 
-        return img, targ, dist, self.target_size
+        return img, targ, dist, self.target_size,  self.img_dir / self.data[img_idx]
 
     def __getitem__(self, idx):
         return self.get_data(idx)

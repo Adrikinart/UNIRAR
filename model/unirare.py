@@ -8,9 +8,9 @@ import torch.nn.functional as F
 
 from .cgru import ConvGRU
 from .MobileNetV2 import MobileNetV2, InvertedResidual
-from .deeprare import *
 
 import warnings
+import time
 warnings.filterwarnings("ignore")
 
 # Set default backbone CNN kwargs
@@ -30,12 +30,193 @@ default_rnn_cfg = {
     "mobile": True,
 }
 
-
 def log_softmax(x):
     x_size = x.size()
     x = x.view(x.size(0), -1)
     x = F.log_softmax(x, dim=1)
     return x.view(x_size)
+
+class RarityNetwork(nn.Module):
+    def __init__(self, threshold= None):
+        super(RarityNetwork, self).__init__()
+        self.threshold= threshold
+
+    def rarity_tensor(self, channel):
+        B,C , a , b = channel.shape
+        if a > 10:  # manage margins for high-level features
+            channel[:,:,0:1, :] = 0
+            channel[:,:,:, a - 1:a] = 0
+            channel[:,:,:, 0:1] = 0
+            channel[:,:,b - 1:b, :] = 0
+        elif a > 28:  # manage margins for mid-level features
+            channel[:,:,0:2, :] = 0
+            channel[:,:,:, a - 2:a] = 0
+            channel[:,:,:, 0:2] = 0
+            channel[:,:,b - 2:b, :] = 0
+        elif a > 50:  # manage margins for low-level features
+            channel[:,:,0:3, :] = 0
+            channel[:,:,:, a - 3:a] = 0
+            channel[:,:,:, 0:3] = 0
+            channel[:,:,b - 3:b, :] = 0
+        
+        channel = channel.view(B,C, -1)
+        tensor_min = channel.min(dim=2, keepdim=True)[0]
+        tensor_max = channel.max(dim=2, keepdim=True)[0]
+        channel = (channel - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        channel = channel * 256
+
+        bins = 11
+
+        min_val, max_val = channel.min(), channel.max()
+        bin_edges = torch.linspace(min_val, max_val, steps=bins + 1, device=channel.device)
+
+        bin_indices = torch.bucketize(channel, bin_edges, right=True) - 1
+        bin_indices = bin_indices.clamp(0, bins - 1)
+
+        histograms = torch.zeros((B,C, bins), device=channel.device)
+        histograms.scatter_add_(2, bin_indices, torch.ones_like(bin_indices, dtype=torch.float, device=channel.device))    
+
+        histograms = histograms / histograms.sum(dim=2, keepdim=True)
+        histograms = -torch.log(histograms + 1e-4)
+        hists_idx = ((channel/256.) * (bins - 1)).long().clamp(0, bins - 1)
+
+        dst = histograms.gather(2, hists_idx)
+
+        tensor_min = dst.min(dim=2, keepdim=True)[0]
+        tensor_max = dst.max(dim=2, keepdim=True)[0]
+        dst = (dst - tensor_min) / (tensor_max - tensor_min + 1e-8)
+
+        if self.threshold is not None:
+            dst[dst < self.threshold] = 0
+
+        map_max = dst.max(dim=2, keepdim=True)[0]
+        map_mean = dst.mean(dim=2, keepdim=True)
+        map_weight = (map_max - map_mean) ** 2  # Itti-like weight
+        dst = dst * map_weight
+
+        dst = torch.pow(dst, 2)
+        ma = dst.max(dim=2, keepdim=True)[0]
+        me = dst.mean(dim=2, keepdim=True)
+        w = (ma - me) * (ma - me)
+        dst = w * dst
+
+        tensor_min = dst.min(dim=2, keepdim=True)[0]
+        tensor_max = dst.max(dim=2, keepdim=True)[0]
+        dst = (dst - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        dst = dst.view(B,C, a,b)
+
+        if a > 28:
+            dst[:,:,0:2, :] = 0
+            dst[:,:,:, a - 2:a] = 0
+            dst[:,:,:, 0:2] = 0
+            dst[:,:,b - 2:b, :] = 0
+        elif a > 50:
+            dst[:,:,0:3, :] = 0
+            dst[:,:,:, a - 3:a] = 0
+            dst[:,:,:, 0:3] = 0
+            dst[:,:,b - 3:b, :] = 0
+
+        dst = dst.view(B,C, -1)
+        dst = torch.pow(dst, 2)
+        ma = dst.max(dim=2, keepdim=True)[0]
+        me = dst.mean(dim=2, keepdim=True)
+        w = (ma - me) * (ma - me)
+        dst = w * dst
+
+        return dst.view(B,C, a,b)
+
+
+    def apply_rarity(self, layer_output, layer_ind):
+        features_processed = self.rarity_tensor(layer_output[layer_ind - 1].clone())
+
+        features_processed =features_processed.sum(dim=1)
+
+        start = time.time()
+        features_processed= F.interpolate(features_processed.clone().unsqueeze(0), (240,240), mode='bilinear', align_corners=False)
+
+        # print(f" process interpolate {time.time() - start :.8f}")
+
+
+        # features_processed= F.interpolate(features_processed.clone(), (240,240), mode='bilinear', align_corners=False)
+
+        return features_processed
+
+    def fuse_itti_tensor(self, tensor):
+        # Itti-like fusion between two maps
+        B, C , W , H = tensor.shape
+        tensor= tensor.view(B, C, -1)
+
+        # Normalize 0 1
+        tensor_min = tensor.min(dim=2, keepdim=True)[0]
+        tensor_max = tensor.max(dim=2, keepdim=True)[0]
+        tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
+
+        tensor_min = tensor.min(dim=2, keepdim=True)[0]
+        tensor_max = tensor.max(dim=2, keepdim=True)[0]
+        tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
+
+        # Compute Weights
+        tensor_max = tensor.max(dim=2, keepdim=True)[0]
+        tensor_mean = tensor.mean(dim=2, keepdim=True)
+        w1 = torch.square(tensor_max - tensor_mean)
+        tensor = w1 * tensor
+        tensor= tensor.sum(dim=1)
+
+        # normalize 0 255
+        tensor_min = tensor.min(dim=1, keepdim=True)[0]
+        tensor_max = tensor.max(dim=1, keepdim=True)[0]
+        tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
+        tensor *= 255
+
+        return tensor.view(B,W,H)
+    
+    def forward(
+            self,
+            layer_output,
+            layers=[
+                [4,5],
+                [7,8],
+                [10,11],
+                [13,14],
+                [16,17]
+            ]
+        ):
+
+        # for i,layer in enumerate(layer_output):
+        #     print(f"Layer {i+1}: ",layer.shape)
+
+        groups = []
+        for layers_index in layers:
+            tempo = []
+            for index in layers_index:
+                tempo.append(self.apply_rarity(layer_output, index))
+
+            tempo = torch.cat(tempo, dim=1)
+            # tempo = torch.stack(tempo, dim=1)
+            groups.append(self.fuse_itti_tensor(tempo))
+        groups= torch.stack(groups, dim=1)
+
+        
+        SAL = groups.sum(dim= 1)
+
+        B,W,H = SAL.shape
+        SAL = SAL.view(B , -1)
+
+        SAL_min = SAL.min(dim=1, keepdim=True)[0]
+        SAL_max = SAL.max(dim=1, keepdim=True)[0]
+        SAL = (SAL - SAL_min) / (SAL_max - SAL_min + 1e-8)
+
+        SAL = torch.exp(SAL)
+
+        SAL_min = SAL.min(dim=1, keepdim=True)[0]
+        SAL_max = SAL.max(dim=1, keepdim=True)[0]
+        SAL = (SAL - SAL_min) / (SAL_max - SAL_min + 1e-8)
+
+
+        SAL= SAL.view(B,W,H)
+
+        return SAL, groups
+
 
 
 class BaseModel(nn.Module):
@@ -56,18 +237,6 @@ class BaseModel(nn.Module):
         """Load state_dict from a Trainer checkpoint at a specific epoch"""
         chkpnt = torch.load(directory / f"chkpnt_epoch{epoch:04d}.pth" , map_location = 'cpu' ,  weights_only=True)
         self.load_state_dict(chkpnt["model_state_dict"] , map_location = 'cpu' ,  weights_only=True)
-
-    # def load_checkpoint(self, file):
-    #     """Load state_dict from a specific Trainer checkpoint"""
-    #     """Load """
-    #     chkpnt = torch.load(file)
-    #     self.load_state_dict(chkpnt["model_state_dict"])
-
-    # def load_last_chkpnt(self, directory):
-    #     """Load state_dict from the last Trainer checkpoint"""
-    #     last_chkpnt = sorted(list(directory.glob("chkpnt_epoch*.pth")))[-1]
-    #     self.load_checkpoint(last_chkpnt)
-
 
 class DomainBatchNorm2d(nn.Module):
     """
@@ -159,7 +328,7 @@ class UNIRARE(BaseModel):
         ds_smoothing=True,
         ds_gaussians=True,
         verbose=1,
-        layers = [6,7, 12,13,14,  16,17,18]
+        threshold= None
     ):
         super().__init__()
 
@@ -198,13 +367,12 @@ class UNIRARE(BaseModel):
         self.ds_smoothing = ds_smoothing
         self.ds_gaussians = ds_gaussians
         self.verbose = verbose
-        self.layers = layers
 
         # Initialize backbone CNN
         self.cnn = MobileNetV2(**self.cnn_cfg)
 
         # load deep rare model
-        self.deeprare = RarityNetwork()
+        self.deeprare = RarityNetwork(threshold=threshold)
 
         # Initialize Post-CNN module with optional dropout
         post_cnn = [
@@ -522,11 +690,10 @@ class UNIRARE(BaseModel):
         sal_rare = []
         level_rare= []
         for t, img in enumerate(torch.unbind(x, dim=1)):
-            im_feat_1x, im_feat_2x, im_feat_4x, layers = self.cnn(img,layers= self.layers)
+            im_feat_1x, im_feat_2x, im_feat_4x, layers = self.cnn(img,layers= True)
 
-
-            
-            SAL, groups = self.deeprare(layers,target_size)
+            # SAL, groups = self.deeprare(layers,target_size)
+            SAL, groups = self.deeprare(layers)
 
             sal_rare.append(SAL)
             level_rare.append(groups)
