@@ -28,8 +28,8 @@ else:
 print("DEFAULT_DEVICE " ,DEFAULT_DEVICE)
 
 
-def show_images(img, saliency_rare, saliency_rare_details, threshold , index):
-    plt.figure(1)
+def show_images(img, saliency_rare, saliency_rare_details, args , index):
+    plt.figure(figsize=(10,10))
 
     plt.subplot(421)
     plt.imshow(img)
@@ -54,7 +54,7 @@ def show_images(img, saliency_rare, saliency_rare_details, threshold , index):
     output_dir = "./outputs/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    output_path = os.path.join(output_dir, f"image_{index}_deeprare_threshold_{threshold}.jpeg")
+    output_path = os.path.join(output_dir, f"image_{index}_{args.name}_threshold_{args.threshold}.jpeg")
     plt.savefig(output_path)
     plt.show()
 
@@ -96,7 +96,7 @@ def run_dataset(name,directory, model, args):
             img,
             saliency_rare,
             saliency_rare_details,
-            args.threshold,
+            args,
             index
         )
 
@@ -122,6 +122,14 @@ if __name__ == "__main__":
         type=float, 
         default=None, 
         help="Threshold for torch rare 2021"
+    )
+
+
+    parser.add_argument(
+        "--name", 
+        type=str, 
+        default="deeprare", 
+        help="add name information"
     )
 
     args = parser.parse_args()

@@ -30,14 +30,11 @@ default_rnn_cfg = {
     "mobile": True,
 }
 
-
 def log_softmax(x):
     x_size = x.size()
     x = x.view(x.size(0), -1)
     x = F.log_softmax(x, dim=1)
     return x.view(x_size)
-
-
 
 class RarityNetwork(nn.Module):
     def __init__(self, threshold= None):
@@ -61,7 +58,6 @@ class RarityNetwork(nn.Module):
             channel[:,:,:, a - 3:a] = 0
             channel[:,:,:, 0:3] = 0
             channel[:,:,b - 3:b, :] = 0
-
         
         channel = channel.view(B,C, -1)
         tensor_min = channel.min(dim=2, keepdim=True)[0]
@@ -132,8 +128,18 @@ class RarityNetwork(nn.Module):
 
     def apply_rarity(self, layer_output, layer_ind):
         features_processed = self.rarity_tensor(layer_output[layer_ind - 1].clone())
+
         features_processed =features_processed.sum(dim=1)
-        return F.interpolate(features_processed.clone().unsqueeze(0), (240,240), mode='bilinear', align_corners=False).squeeze(0)
+
+        start = time.time()
+        features_processed= F.interpolate(features_processed.clone().unsqueeze(0), (240,240), mode='bilinear', align_corners=False)
+
+        # print(f" process interpolate {time.time() - start :.8f}")
+
+
+        # features_processed= F.interpolate(features_processed.clone(), (240,240), mode='bilinear', align_corners=False)
+
+        return features_processed
 
     def fuse_itti_tensor(self, tensor):
         # Itti-like fusion between two maps
@@ -141,6 +147,10 @@ class RarityNetwork(nn.Module):
         tensor= tensor.view(B, C, -1)
 
         # Normalize 0 1
+        tensor_min = tensor.min(dim=2, keepdim=True)[0]
+        tensor_max = tensor.max(dim=2, keepdim=True)[0]
+        tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
+
         tensor_min = tensor.min(dim=2, keepdim=True)[0]
         tensor_max = tensor.max(dim=2, keepdim=True)[0]
         tensor = (tensor - tensor_min) / (tensor_max - tensor_min + 1e-8)
@@ -164,27 +174,47 @@ class RarityNetwork(nn.Module):
             self,
             layer_output,
             layers=[
-                [2,3,4],
-                [5,6,7],
-                [8,9,10],
-                [12,13,14],
-                [16,17,18,19]
+                [4,5],
+                [7,8],
+                [10,11],
+                [13,14],
+                [16,17]
             ]
         ):
 
         # for i,layer in enumerate(layer_output):
-            # print(f"Layer {i+1}: ",layer.shape)
+        #     print(f"Layer {i+1}: ",layer.shape)
 
         groups = []
         for layers_index in layers:
             tempo = []
             for index in layers_index:
                 tempo.append(self.apply_rarity(layer_output, index))
-            tempo = torch.stack(tempo, dim=1)
+
+            tempo = torch.cat(tempo, dim=1)
+            # tempo = torch.stack(tempo, dim=1)
             groups.append(self.fuse_itti_tensor(tempo))
         groups= torch.stack(groups, dim=1)
 
+        
         SAL = groups.sum(dim= 1)
+
+        B,W,H = SAL.shape
+        SAL = SAL.view(B , -1)
+
+        SAL_min = SAL.min(dim=1, keepdim=True)[0]
+        SAL_max = SAL.max(dim=1, keepdim=True)[0]
+        SAL = (SAL - SAL_min) / (SAL_max - SAL_min + 1e-8)
+
+        SAL = torch.exp(SAL)
+
+        SAL_min = SAL.min(dim=1, keepdim=True)[0]
+        SAL_max = SAL.max(dim=1, keepdim=True)[0]
+        SAL = (SAL - SAL_min) / (SAL_max - SAL_min + 1e-8)
+
+
+        SAL= SAL.view(B,W,H)
+
         return SAL, groups
 
 

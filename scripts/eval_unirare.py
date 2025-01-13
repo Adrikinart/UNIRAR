@@ -253,6 +253,12 @@ if __name__ == "__main__":
         help="image or video"
     )
 
+    parser.add_argument(
+        "--name", 
+        type=str, 
+        default='unirare', 
+        help="Name information"
+    )
 
     parser.add_argument(
         "--source", 
@@ -294,9 +300,9 @@ if __name__ == "__main__":
 
     # Create folder in "../res" with name unirare and args information
     if args.finetune.lower() == "true":
-        res_dir = os.path.join("..", "res", f"unirare_finetune_threshold_{args.threshold}_{args.type}")
+        res_dir = os.path.join("..", "res", f"{args.name}_finetune_threshold_{args.threshold}_{args.type}")
     else:
-        res_dir = os.path.join("..", "res", f"unirare_threshold_{args.threshold}_{args.type}")
+        res_dir = os.path.join("..", "res", f"{args.name}_threshold_{args.threshold}_{args.type}")
     os.makedirs(res_dir, exist_ok=True)
     print(f"Results will be saved in {res_dir}")
 
