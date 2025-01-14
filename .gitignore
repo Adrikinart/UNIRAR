@@ -5,6 +5,8 @@ __pycache__/
 *$py.class
 
 test/outputs/*
+res/
+model/TranSalNet/pretrained_models/
 
 # C extensions
 *.so
