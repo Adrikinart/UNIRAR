@@ -34,7 +34,7 @@ def post_process(map, img):
     return cv2.resize(map_ , (img.shape[1] , img.shape[0]))
 
 
-def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusion_rs, saliency_rare_details, targ, dist):
+def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusion_rs,saliency_fusion_prod, saliency_rare_details, targ, dist):
 
     saliency_fusion_add_color = cv2.applyColorMap(saliency_fusion_add, cv2.COLORMAP_JET)
     saliency_fusion_add_color = cv2.cvtColor(saliency_fusion_add_color, cv2.COLOR_BGR2RGB)
@@ -54,6 +54,33 @@ def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusi
 
     saliency_fusion_add_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_add_color, 0.4, 0)
     saliency_fusion_rs_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_rs_color, 0.4, 0)
+
+
+    
+    saliency_fusion_add_color = cv2.applyColorMap(saliency_fusion_add, cv2.COLORMAP_JET)
+    saliency_fusion_add_color = cv2.cvtColor(saliency_fusion_add_color, cv2.COLOR_BGR2RGB)
+
+    saliency_fusion_rs_color = cv2.applyColorMap(saliency_fusion_rs, cv2.COLORMAP_JET)
+    saliency_fusion_rs_color = cv2.cvtColor(saliency_fusion_rs_color, cv2.COLOR_BGR2RGB)
+
+    saliency_fusion_prod_color = cv2.applyColorMap(saliency_fusion_prod, cv2.COLORMAP_JET)
+    saliency_fusion_prod_color = cv2.cvtColor(saliency_fusion_prod_color, cv2.COLOR_BGR2RGB)
+
+
+    saliency_color = cv2.applyColorMap(saliency, cv2.COLORMAP_JET)
+    saliency_color = cv2.cvtColor(saliency_color, cv2.COLOR_BGR2RGB)
+
+    saliency_rare_color = cv2.applyColorMap(saliency_rare, cv2.COLORMAP_JET)
+    saliency_rare_color = cv2.cvtColor(saliency_rare_color, cv2.COLOR_BGR2RGB)
+
+
+    saliency_color_img = cv2.addWeighted(img, 0.6, saliency_color, 0.4, 0)
+    saliency_rare_color_img = cv2.addWeighted(img, 0.6, saliency_rare_color, 0.4, 0)
+
+    saliency_fusion_add_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_add_color, 0.4, 0)
+    saliency_fusion_rs_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_rs_color, 0.4, 0)
+    saliency_fusion_prod_color_img = cv2.addWeighted(img, 0.6, saliency_fusion_prod_color, 0.4, 0)
+
 
 
     plt.figure()
@@ -79,60 +106,74 @@ def show_images(img, saliency, saliency_rare, saliency_fusion_add, saliency_fusi
     plt.axis('off')
     plt.title('saliency')
 
+
     plt.figure(figsize=(10,10))
 
-    plt.subplot(451)
+    plt.subplot(461)
     plt.imshow(img)
     plt.axis('off')
     plt.title('Initial Image')
 
-    plt.subplot(452)
+    plt.subplot(462)
     plt.imshow(saliency_rare)
     plt.axis('off')
     plt.title('saliency_rare')
 
-    plt.subplot(453)
-    plt.imshow(saliency_color)
+    plt.subplot(463)
     plt.axis('off')
+    plt.imshow(saliency_color)
     plt.title('saliency')
 
-    plt.subplot(454)
+    plt.subplot(464)
     plt.imshow(saliency_fusion_add_color)
     plt.axis('off')
     plt.title('fusion_add')
 
-    plt.subplot(455)
+    plt.subplot(465)
     plt.imshow(saliency_fusion_rs_color)
     plt.axis('off')
-    plt.title('fusion_rs')
+    plt.title('fusion_sub')
 
-    plt.subplot(456)
+
+    plt.subplot(466)
+    plt.imshow(saliency_fusion_prod_color)
+    plt.axis('off')
+    plt.title('fusion_prod')
+
+
+    plt.subplot(467)
     plt.imshow(img)
     plt.axis('off')
     plt.title('Initial Image')
 
-    plt.subplot(457)
+    plt.subplot(468)
     plt.imshow(saliency_rare_color_img)
     plt.axis('off')
     plt.title('saliency_rare')
 
-    plt.subplot(458)
+    plt.subplot(469)
     plt.imshow(saliency_color_img)
     plt.axis('off')
     plt.title('saliency')
 
-    plt.subplot(459)
+    plt.subplot(4,6,10)
     plt.imshow(saliency_fusion_add_color_img)
     plt.axis('off')
     plt.title('fusion_add')
 
-    plt.subplot(4,5,10)
+    plt.subplot(4,6,11)
     plt.imshow(saliency_fusion_rs_color_img)
     plt.axis('off')
-    plt.title('fusion_rs')
+    plt.title('fusion_sub')
+
+
+    plt.subplot(4,6,12)
+    plt.imshow(saliency_fusion_prod_color_img)
+    plt.axis('off')
+    plt.title('fusion_prod')
 
     for i in range(0,saliency_rare_details.shape[0]):
-        plt.subplot(4,5,11 + i)
+        plt.subplot(4,6,13 + i)
         plt.imshow(saliency_rare_details[i,:, :])
         plt.axis('off')
         plt.title(f'Level {i}Saliency Map')
@@ -157,8 +198,24 @@ def run_dataset(name,directory, model, args, path_save, show = False):
 
             # open images
             img = cv2.imread(go_path)
-            targ = cv2.imread(go_path.replace("images","targ_labels"),0)
-            dist = cv2.imread(go_path.replace("images","dist_labels"),0)
+
+            # check if img is none
+            if img is None:
+                continue
+
+            if name == "MIT1003":
+                directory_fixation = directory.replace("images","fixation")
+                directory_saliency = directory.replace("images","saliency")
+
+                fix = cv2.imread(os.path.join(directory_fixation , filename.replace(".jpeg" , "_fixMap.jpg")),0)
+                sal = cv2.imread(os.path.join(directory_saliency , filename.replace(".jpeg" , "SM.jpg")),0)
+
+                targ = cv2.imread(os.path.join(directory_fixation , filename.replace(".jpeg" , "_fixMap.jpg")),0)
+                dist = cv2.imread(os.path.join(directory_saliency , filename.replace(".jpeg" , "SM.jpg")),0)
+
+            else:
+                targ = cv2.imread(go_path.replace("images","targ_labels"),0)
+                dist = cv2.imread(go_path.replace("images","dist_labels"),0)
 
             # open image tensor
             tensor_image = opener.open_image(
@@ -189,14 +246,18 @@ def run_dataset(name,directory, model, args, path_save, show = False):
             saliency_fusion_add = saliency_rare + saliency
             saliency_fusion_add = (saliency_fusion_add - saliency_fusion_add.min()) / (saliency_fusion_add.max() - saliency_fusion_add.min()) * 255
 
-            saliency_fusion_rs = np.abs(saliency_rare - saliency)
-            saliency_fusion_rs = (saliency_fusion_rs - saliency_fusion_rs.min()) / (saliency_fusion_rs.max() - saliency_fusion_rs.min()) * 255
+            saliency_fusion_sub = np.abs(saliency_rare - saliency)
+            saliency_fusion_sub = (saliency_fusion_sub - saliency_fusion_sub.min()) / (saliency_fusion_sub.max() - saliency_fusion_sub.min()) * 255
 
+            saliency_fusion_prod = saliency_rare * saliency
+            saliency_fusion_prod = (saliency_fusion_prod - saliency_fusion_prod.min()) / (saliency_fusion_prod.max() - saliency_fusion_prod.min()) * 255
 
             saliency = (saliency).astype(np.uint8)
             saliency_rare = (saliency_rare).astype(np.uint8)
             saliency_fusion_add = (saliency_fusion_add).astype(np.uint8)
-            saliency_fusion_rs = (saliency_fusion_rs).astype(np.uint8)
+            saliency_fusion_sub = (saliency_fusion_sub).astype(np.uint8)
+            saliency_fusion_prod = (saliency_fusion_prod).astype(np.uint8)
+
 
             if show:
                 show_images(
@@ -204,24 +265,87 @@ def run_dataset(name,directory, model, args, path_save, show = False):
                     saliency,
                     saliency_rare,
                     saliency_fusion_add,
-                    saliency_fusion_rs,
+                    saliency_fusion_sub,
+                    saliency_fusion_prod,
                     saliency_rare_details,
                     targ,
                     dist
                 )
 
-            results.append({
-                "filename": filename,
-                'path' : directory,
-                'metrics' : 
-                {
-                    'saliency': metrics.compute_msr(saliency, targ, dist),
-                    'saliency_rare': metrics.compute_msr(saliency_rare, targ, dist),
-                    'saliency_fusion_add': metrics.compute_msr(saliency_fusion_add, targ, dist),
-                    'saliency_fusion_rs': metrics.compute_msr(saliency_fusion_rs, targ, dist),
+            if name == "MIT1003":
+                fix = cv2.normalize(fix, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_64F)
+                sal = cv2.normalize(sal, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_64F)
+                saliency = saliency.astype(np.float64) / 255.0
 
-                }
-            })
+                # Resize all images to 212x212
+                fix = cv2.resize(fix, (212, 212))
+                sal = cv2.resize(sal, (212, 212))
+                saliency = cv2.resize(saliency, (212, 212))
+                saliency_rare = cv2.resize(saliency_rare, (212, 212))
+                saliency_fusion_add = cv2.resize(saliency_fusion_add, (212, 212))
+                saliency_fusion_sub = cv2.resize(saliency_fusion_sub, (212, 212))
+                saliency_fusion_prod = cv2.resize(saliency_fusion_prod, (212, 212))
+
+
+                results.append({
+                    "filename": filename,
+                    'path' : directory,
+                    'metrics' : 
+                    {
+                        'saliency': {
+                            'NSS': round(metrics.NSS_score(saliency, fix), 4),
+                            'CC': round(metrics.CC_score(saliency, sal), 4),
+                            'KLD': round(metrics.KLdiv(saliency, fix), 4),
+                            'SIM': round(metrics.SIM(saliency, sal), 4),
+                            'AUC-J': round(metrics.AUC_Judd(saliency, fix), 2),
+                        },
+                        "saliency_rare": {
+                            'NSS': round(metrics.NSS_score(saliency_rare, fix), 4),
+                            'CC': round(metrics.CC_score(saliency_rare, sal), 4),
+                            'KLD': round(metrics.KLdiv(saliency_rare, fix), 4),
+                            'SIM': round(metrics.SIM(saliency_rare, sal), 4),
+                            'AUC-J': round(metrics.AUC_Judd(saliency_rare, fix), 2),
+                        },
+                        "saliency_fusion_add": {
+                            'NSS': round(metrics.NSS_score(saliency_fusion_add, fix), 4),
+                            'CC': round(metrics.CC_score(saliency_fusion_add, sal), 4),
+                            'KLD': round(metrics.KLdiv(saliency_fusion_add, fix), 4),
+                            'SIM': round(metrics.SIM(saliency_fusion_add, sal), 4),
+                            'AUC-J': round(metrics.AUC_Judd(saliency_fusion_add, fix), 2),
+                        },
+                        "saliency_fusion_sub": {
+                            'NSS': round(metrics.NSS_score(saliency_fusion_sub, fix), 4),
+                            'CC': round(metrics.CC_score(saliency_fusion_sub, sal), 4),
+                            'KLD': round(metrics.KLdiv(saliency_fusion_sub, fix), 4),
+                            'SIM': round(metrics.SIM(saliency_fusion_sub, sal), 4),
+                            'AUC-J': round(metrics.AUC_Judd(saliency_fusion_sub, fix), 2),
+                        },
+                        "saliency_fusion_prod": {
+                            'NSS': round(metrics.NSS_score(saliency_fusion_prod, fix), 4),
+                            'CC': round(metrics.CC_score(saliency_fusion_prod, sal), 4),
+                            'KLD': round(metrics.KLdiv(saliency_fusion_prod, fix), 4),
+                            'SIM': round(metrics.SIM(saliency_fusion_prod, sal), 4),
+                            'AUC-J': round(metrics.AUC_Judd(saliency_fusion_prod, fix), 2),
+                        }
+
+                    }
+                })
+
+
+            else:
+
+                results.append({
+                    "filename": filename,
+                    'path' : directory,
+                    'metrics' : 
+                    {
+                        'saliency': metrics.compute_msr(saliency, targ, dist),
+                        'saliency_rare': metrics.compute_msr(saliency_rare, targ, dist),
+                        'saliency_fusion_add': metrics.compute_msr(saliency_fusion_add, targ, dist),
+                        'saliency_fusion_rs': metrics.compute_msr(saliency_fusion_rs, targ, dist),
+
+                    }
+                })
 
         # Print loading bar with FPS information
         process_time_global = time.time() - start_time_global
@@ -306,30 +430,38 @@ if __name__ == "__main__":
     os.makedirs(res_dir, exist_ok=True)
     print(f"Results will be saved in {res_dir}")
 
+    # run_dataset(
+    #     name= "O3_data" ,
+    #     directory = "/Users/coconut/Documents/Dataset/Saliency/O3_data/images/" , 
+    #     model= model,
+    #     args= args,
+    #     path_save= res_dir
+    # )
+    # run_dataset(
+    #     name= "P3_data_sizes" ,
+    #     directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/sizes/images/" , 
+    #     model= model,
+    #     args= args,
+    #     path_save= res_dir
+    # )
+    # run_dataset(
+    #     name= "P3_data_orientations" ,
+    #     directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/orientations/images/" , 
+    #     model= model,
+    #     args= args,
+    #     path_save= res_dir
+    # )
+    # run_dataset(
+    #     name= "P3_data_colors" ,
+    #     directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/colors/images/" , 
+    #     model= model,
+    #     args= args,
+    #     path_save= res_dir
+    # )
+
     run_dataset(
-        name= "O3_data" ,
-        directory = "/Users/coconut/Documents/Dataset/Saliency/O3_data/images/" , 
-        model= model,
-        args= args,
-        path_save= res_dir
-    )
-    run_dataset(
-        name= "P3_data_sizes" ,
-        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/sizes/images/" , 
-        model= model,
-        args= args,
-        path_save= res_dir
-    )
-    run_dataset(
-        name= "P3_data_orientations" ,
-        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/orientations/images/" , 
-        model= model,
-        args= args,
-        path_save= res_dir
-    )
-    run_dataset(
-        name= "P3_data_colors" ,
-        directory = "/Users/coconut/Documents/Dataset/Saliency/P3_data/colors/images/" , 
+        name= "MIT1003" ,
+        directory = "/Users/coconut/Documents/Dataset/Saliency/MIT1003/images/" , 
         model= model,
         args= args,
         path_save= res_dir

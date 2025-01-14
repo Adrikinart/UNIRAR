@@ -5,134 +5,8 @@ import cv2
 import random
 import numpy as np
 import skimage.morphology as morph
-
-def count_fixations(saliency_map, target_mask):
-    """
-    Compte le nombre de fixations nécessaires pour atteindre la cible.
-    
-    Args:
-        saliency_map (torch.Tensor): Carte de saillance (H x W).
-        target_mask (torch.Tensor): Masque binaire (H x W) de la cible.
-    
-    Returns:
-        int: Nombre de fixations.
-    """
-    fixations = 0
-    current_map = saliency_map.clone()
-    while not target_reached(current_map, target_mask):
-        fixations += 1
-        max_pos = torch.argmax(current_map)
-        current_map.view(-1)[max_pos] = 0
-    return fixations
-
-def target_reached(saliency_map, target_mask):
-    """
-    Vérifie si la cible a été atteinte.
-    
-    Args:
-        saliency_map (torch.Tensor): Carte de saillance (H x W).
-        target_mask (torch.Tensor): Masque binaire (H x W) de la cible.
-    
-    Returns:
-        bool: True si la cible est atteinte, sinon False.
-    """
-    max_pos = torch.argmax(saliency_map.view(-1))
-    return target_mask.view(-1)[max_pos].item() == 1
-
-def compute_gsi(target_saliency, distractor_saliency):
-    """
-    Calcule le GSI (Global Saliency Index).
-    
-    Args:
-        target_saliency (torch.Tensor): Saillance de la cible.
-        distractor_saliency (torch.Tensor): Saillance des distracteurs.
-    
-    Returns:
-        float: GSI.
-    """
-    return target_saliency.mean().item() - distractor_saliency.mean().item()
-
-
-
-
-def correlation_coefficient(predicted, ground_truth):
-    """
-    Calcule le coefficient de corrélation (CC) entre deux cartes.
-    
-    Args:
-        predicted (torch.Tensor): Carte prédite (H x W).
-        ground_truth (torch.Tensor): Carte réelle (H x W).
-    
-    Returns:
-        float: Coefficient de corrélation.
-    """
-    predicted = predicted.flatten()
-    ground_truth = ground_truth.flatten()
-    mean_pred = predicted.mean()
-    mean_gt = ground_truth.mean()
-    numerator = ((predicted - mean_pred) * (ground_truth - mean_gt)).sum()
-    denominator = torch.sqrt(((predicted - mean_pred) ** 2).sum() * ((ground_truth - mean_gt) ** 2).sum())
-    return (numerator / denominator).item()
-
-def kl_divergence(predicted, ground_truth):
-    """
-    Calcule la divergence de Kullback-Leibler (KL).
-    
-    Args:
-        predicted (torch.Tensor): Carte prédite (H x W).
-        ground_truth (torch.Tensor): Carte réelle (H x W).
-    
-    Returns:
-        float: KL divergence.
-    """
-    predicted = predicted / predicted.sum()
-    ground_truth = ground_truth / ground_truth.sum()
-    return (ground_truth * (ground_truth.log() - predicted.log())).sum().item()
-
-def auc_score(predicted, fixations):
-    """
-    Calcule l'AUC pour les fixations binaires.
-    
-    Args:
-        predicted (torch.Tensor): Carte prédite (H x W).
-        fixations (torch.Tensor): Masque binaire des fixations (H x W).
-    
-    Returns:
-        float: Score AUC.
-    """
-    predicted = predicted.flatten().cpu().numpy()
-    fixations = fixations.flatten().cpu().numpy()
-    return roc_auc_score(fixations, predicted)
-
-def nss(saliency_map, fixation_map):
-    """
-    Calcule le NSS (Normalized Scan-path Saliency).
-    
-    Args:
-        saliency_map (torch.Tensor): Carte de saillance (H x W).
-        fixation_map (torch.Tensor): Carte des fixations (H x W).
-    
-    Returns:
-        float: NSS.
-    """
-    saliency_map = (saliency_map - saliency_map.mean()) / saliency_map.std()
-    return saliency_map[fixation_map > 0].mean().item()
-
-def similarity(predicted, ground_truth):
-    """
-    Calcule la similarité entre deux cartes.
-    
-    Args:
-        predicted (torch.Tensor): Carte prédite (H x W).
-        ground_truth (torch.Tensor): Carte réelle (H x W).
-    
-    Returns:
-        float: Similarité.
-    """
-    predicted = predicted / predicted.sum()
-    ground_truth = ground_truth / ground_truth.sum()
-    return torch.min(predicted, ground_truth).sum().item()
-
+import torch
+import torch.nn.functional as F
 
 def compute_msr(salmap, targmap, distmap):
     """
@@ -226,3 +100,258 @@ def MSR_bg(salmap, targmap, distmap, dilate=0, add_eps=False):
         score = -1
 
     return float( score )
+
+
+
+
+def NSS_score(saliencyMap, fixationMap):
+    """
+    Compute the Normalized Scanpath Saliency (NSS) score.
+
+    Args:
+        saliencyMap (numpy.ndarray): The saliency map.
+        fixationMap (numpy.ndarray): The human fixation map (binary matrix).
+
+    Returns:
+        float: The NSS score.
+    """
+    map_resized = cv2.resize(saliencyMap, (fixationMap.shape[1], fixationMap.shape[0]))
+
+    # normalize saliency map
+    map_normalized = (map_resized - np.mean(map_resized)) / np.std(map_resized)
+
+    # mean value at fixation locations
+    score = np.mean(map_normalized[fixationMap.astype(bool)])
+
+    return score
+
+
+
+def CC_score(saliencyMap1, saliencyMap2):
+    """
+    Compute the Correlation Coefficient (CC) score between two saliency maps.
+
+    Args:
+        saliencyMap1 (numpy.ndarray): The first saliency map.
+        saliencyMap2 (numpy.ndarray): The second saliency map.
+
+    Returns:
+        float: The CC score.
+    """
+    map1 = cv2.resize(saliencyMap1, (saliencyMap2.shape[1], saliencyMap2.shape[0])).astype(np.float64)
+    map2 = saliencyMap2.astype(np.float64)
+
+    # normalize both maps
+    map1 = (map1 - np.mean(map1)) / np.std(map1)
+    map2 = (map2 - np.mean(map2)) / np.std(map2)
+
+    score = np.corrcoef(map1.flatten(), map2.flatten())[0, 1]
+
+    return score
+
+
+def KLdiv(saliencyMap, fixationMap):
+    """
+    Compute the KL-divergence between two maps.
+
+    Args:
+        saliencyMap (numpy.ndarray): The saliency map.
+        fixationMap (numpy.ndarray): The human fixation map.
+
+    Returns:
+        float: The KL-divergence score.
+    """
+    map1 = cv2.resize(saliencyMap, (fixationMap.shape[1], fixationMap.shape[0])).astype(np.float64)
+    map2 = fixationMap.astype(np.float64)
+
+    # make sure map1 and map2 sum to 1
+    if np.any(map1):
+        map1 = map1 / np.sum(map1)
+    if np.any(map2):
+        map2 = map2 / np.sum(map2)
+
+    # compute KL-divergence
+    score = np.sum(map2 * np.log(np.finfo(float).eps + map2 / (map1 + np.finfo(float).eps)))
+    return score
+
+
+def normalize_map(s_map):
+    # normalize the salience map (as done in MIT code)
+    norm_s_map = (s_map - np.min(s_map)) / ((np.max(s_map) - np.min(s_map)))
+    return norm_s_map
+
+
+def AUC_Judd(s_map, gt):
+    # ground truth is discrete, s_map is continous and normalized
+    s_map = cv2.resize(s_map, (gt.shape[1], gt.shape[0])).astype(np.float64)
+
+    s_map = normalize_map(s_map)
+    assert np.max(gt) <= 1.0, 'Ground truth not discretized properly max value > 1.0'
+    assert np.max(s_map) <= 1.0, 'Salience map not normalized properly max value > 1.0'
+
+    # thresholds are calculated from the salience map,
+    # only at places where fixations are present
+    thresholds = s_map[gt > 0].tolist()
+
+    num_fixations = len(thresholds)
+    # num fixations is no. of salience map values at gt >0
+
+    thresholds = sorted(set(thresholds))
+
+    area = []
+    area.append((0.0, 0.0))
+    for thresh in thresholds:
+        # in the salience map,
+        # keep only those pixels with values above threshold
+        temp = s_map >= thresh
+        num_overlap = np.sum(np.logical_and(temp, gt))
+        tp = num_overlap / (num_fixations * 1.0)
+
+        # total number of pixels > threshold - number of pixels that overlap
+        # with gt / total number of non fixated pixels
+        # this becomes nan when gt is full of fixations..this won't happen
+        fp = (np.sum(temp) - num_overlap) / (np.prod(gt.shape[:2]) - num_fixations)
+
+        area.append((round(tp, 4) ,round(fp, 4)))
+
+    area.append((1.0, 1.0))
+    area.sort(key=lambda x: x[0])
+    tp_list, fp_list = list(zip(*area))
+    return np.trapz(np.array(tp_list), np.array(fp_list))
+
+
+def AUC_shuffled(s_map, gt, other_map, n_splits=100, stepsize=0.1):
+
+    # If there are no fixations to predict, return NaN
+    if np.sum(gt) == 0:
+        print('no gt')
+        return None
+
+    # normalize saliency map
+    s_map = normalize_map(s_map)
+
+    S = s_map.flatten()
+    F = gt.flatten()
+    Oth = other_map.flatten()
+
+    Sth = S[F > 0]  # sal map values at fixation locations
+    Nfixations = len(Sth)
+
+    # for each fixation, sample Nsplits values from the sal map at locations
+    # specified by other_map
+
+    ind = np.where(Oth > 0)[0]  # find fixation locations on other images
+
+    Nfixations_oth = min(Nfixations, len(ind))
+    randfix = np.full((Nfixations_oth, n_splits), np.nan)
+
+    for i in range(n_splits):
+        # randomize choice of fixation locations
+        randind = np.random.permutation(ind.copy())
+        # sal map values at random fixation locations of other random images
+        randfix[:, i] = S[randind[:Nfixations_oth]]
+
+    # calculate AUC per random split (set of random locations)
+    auc = np.full(n_splits, np.nan)
+    for s in range(n_splits):
+
+        curfix = randfix[:, s]
+
+        allthreshes = np.flip(np.arange(0, max(np.max(Sth), np.max(curfix)), stepsize))
+        tp = np.zeros(len(allthreshes) + 2)
+        fp = np.zeros(len(allthreshes) + 2)
+        tp[-1] = 1
+        fp[-1] = 1
+
+        for i in range(len(allthreshes)):
+            thresh = allthreshes[i]
+            tp[i + 1] = np.sum(Sth >= thresh) / Nfixations
+            fp[i + 1] = np.sum(curfix >= thresh) / Nfixations_oth
+
+        auc[s] = np.trapz(np.array(tp), np.array(fp))
+
+    return np.mean(auc)
+
+
+
+def SIM(saliencyMap1, saliencyMap2):
+    """
+    Compute the similarity score between two saliency maps.
+
+    Args:
+        saliencyMap1 (numpy.ndarray): The first saliency map.
+        saliencyMap2 (numpy.ndarray): The second saliency map.
+        toPlot (int, optional): If 1, displays output of similarity computation as well as both maps. Defaults to 0.
+
+    Returns:
+        float: The similarity score.
+    """
+    map1 = cv2.resize(saliencyMap1, (saliencyMap2.shape[1], saliencyMap2.shape[0])).astype(np.float64)
+    map2 = saliencyMap2.astype(np.float64)
+
+    if np.any(map1):
+        map1 = (map1 - np.min(map1)) / (np.max(map1) - np.min(map1))
+        map1 = map1 / np.sum(map1)
+
+    if np.any(map2):
+        map2 = (map2 - np.min(map2)) / (np.max(map2) - np.min(map2))
+        map2 = map2 / np.sum(map2)
+
+    if np.isnan(map1).all() or np.isnan(map2).all():
+        return float('nan')
+
+    diff = np.minimum(map1, map2)
+    score = np.sum(diff)
+
+
+
+    return score
+
+
+
+
+
+
+
+
+
+
+import torch as t
+import torch.nn as nn
+
+def loss_KLdiv(pred_map, gt_map):
+    eps = 2.2204e-16
+    pred_map = pred_map/t.sum(pred_map)
+    gt_map = gt_map/t.sum(gt_map)
+    div = t.sum(t.mul(gt_map, t.log(eps + t.div(gt_map,pred_map+eps))))
+    return div 
+        
+    
+def loss_CC(pred_map,gt_map):
+    gt_map_ = (gt_map - t.mean(gt_map))
+    pred_map_ = (pred_map - t.mean(pred_map))
+    cc = t.sum(t.mul(gt_map_,pred_map_))/t.sqrt(t.sum(t.mul(gt_map_,gt_map_))*t.sum(t.mul(pred_map_,pred_map_)))
+    return cc
+
+
+def loss_similarity(pred_map,gt_map):
+    gt_map = (gt_map - t.min(gt_map))/(t.max(gt_map)-t.min(gt_map))
+    gt_map = gt_map/t.sum(gt_map)
+    
+    pred_map = (pred_map - t.min(pred_map))/(t.max(pred_map)-t.min(pred_map))
+    pred_map = pred_map/t.sum(pred_map)
+    
+    diff = t.min(gt_map,pred_map)
+    score = t.sum(diff)
+    
+    return score
+    
+    
+def loss_NSS(pred_map,fix_map):
+    '''ground truth here is fixation map'''
+
+    pred_map_ = (pred_map - t.mean(pred_map))/t.std(pred_map)
+    mask = fix_map.gt(0)
+    score = t.mean(t.masked_select(pred_map_, mask))
+    print(score)
+    return score
