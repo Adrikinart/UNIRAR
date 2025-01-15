@@ -42,13 +42,14 @@ DIRECTORY = "/Users/coconut/Documents/Dataset/Saliency/SALICON/test/"
 def run_model(args, model,file_opener,img_dir):
     start_time = time.time()
 
-    # open image tensor
-    tensor_image = file_opener.open_image(
-        file = img_dir, 
-    )
+
 
     saliency, layers = None, None
     if args.model == "Unisal":
+        tensor_image = file_opener.open_image(
+            file = img_dir, 
+        )
+        
         tensor_image = tensor_image.to(DEFAULT_DEVICE)
         saliency,layers = model(tensor_image, source="SALICON",get_all_layers= True)
 
@@ -58,6 +59,11 @@ def run_model(args, model,file_opener,img_dir):
         layers= layers[0]
 
     if args.model == "TranSalNetDense" or args.model == "TranSalNetRes":
+
+        tensor_image, pad_ = file_opener.open_image(
+            file = img_dir, 
+        )
+
         tensor_image = tensor_image.to(DEFAULT_DEVICE)
         saliency, layers = model(tensor_image)
 
@@ -67,6 +73,20 @@ def run_model(args, model,file_opener,img_dir):
         saliency = file_opener.postprocess_img(saliency, img_dir)
 
         saliency= torch.from_numpy(saliency).type(torch.FloatTensor).unsqueeze(0).to(DEFAULT_DEVICE)
+
+        new_layers= []
+        for layer in layers:
+            rw= layer.shape[-1] / pad_['w']
+            rh= layer.shape[-2] / pad_['h']
+
+            lpad = int(pad_['left'] * rw) +1
+            rpad = int(pad_['right'] * rw)+1
+            tpad = int(pad_['top'] * rh)+1
+            bpad = int(pad_['bottom'] * rh)+1
+
+            layer = layer[:, :, tpad:layer.shape[-2] - bpad, lpad:layer.shape[-1] - rpad]
+            new_layers.append(layer)
+        layers= new_layers
 
     # print(f"Processing {args.model}: {time.time() - start_time:.2f} seconds")
 
@@ -218,19 +238,21 @@ def run_dataset(args, saliency_model, rarity_model, file_opener):
             ]
         elif args.model== "TranSalNetDense":
             layers_index=[
-                [2,3],
-                [4,5],
+                # [2,3],
+                # [4,5],
                 [6,7],
+                [8],
                 [9],
                 [10]
             ]
         elif args.model == "TranSalNetRes":
             layers_index=[
-                [2,3],
-                [4,5],
+                # [2,3],
+                # [4,5],
                 [6],
                 [7],
-                [8]
+                [8],
+                [9]
             ]
 
         # run rarity network
@@ -287,7 +309,7 @@ def run_dataset(args, saliency_model, rarity_model, file_opener):
 
         # print(results[-1])
 
-        # # show results
+        # show results
         # show_saliency(
         #     img= img,
         #     maps= maps,

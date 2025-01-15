@@ -366,7 +366,6 @@ if __name__ == "__main__":
         choices= ["Unisal", "TranSalNetDense" , "TranSalNetRes"]
     )
 
-
     # get arguments
     args = parser.parse_args()
 
@@ -389,7 +388,6 @@ if __name__ == "__main__":
     args.path = f"../res/{args.model}_finetune_{args.finetune.lower()}_threshold_{args.threshold}"
     os.makedirs(args.path, exist_ok=True)
     print(f"Results will be saved in {args.path}")
-
 
     #  run dataset test
     run_dataset_MIT1003(
