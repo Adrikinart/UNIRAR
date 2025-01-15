@@ -4,8 +4,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-test/outputs/*
-res/
+scripts/outputs/*
 model/TranSalNet/pretrained_models/
 
 # C extensions
