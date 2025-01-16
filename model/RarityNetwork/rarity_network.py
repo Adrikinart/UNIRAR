@@ -307,8 +307,8 @@ class RarityNetwork(nn.Module):
         for layer in layers_input:
             assert layer.ndim == 4, "Each layer in layer_output must have the same dimensions B, C, W, H"
 
-        for i,layer in enumerate(layers_input):
-            print(f"Layer {i+1}: ",layer.shape)
+        # for i,layer in enumerate(layers_input):
+            # print(f"Layer {i+1}: ",layer.shape)
 
         groups = []
         for layer_index in layers_index:
@@ -337,19 +337,19 @@ class RarityNetwork(nn.Module):
 
         SAL= SAL.view(B,W,H)
 
-        # Convert SAL to numpy array
-        sal_np = SAL.detach().cpu().numpy()
+        # # Convert SAL to numpy array
+        # sal_np = SAL.detach().cpu().numpy()
 
-        # Apply cv2 erode and dilatation
-        kernel = np.ones((5, 5), np.uint8)
-        sal_np = cv2.erode(sal_np, kernel, iterations=3)
-        sal_np = cv2.dilate(sal_np, kernel, iterations=1)
+        # # Apply cv2 erode and dilatation
+        # kernel = np.ones((5, 5), np.uint8)
+        # sal_np = cv2.erode(sal_np, kernel, iterations=3)
+        # sal_np = cv2.dilate(sal_np, kernel, iterations=1)
 
-        # Convert back to torch tensor
-        sal_torch = torch.from_numpy(sal_np).to(SAL.device)
+        # # Convert back to torch tensor
+        # sal_torch = torch.from_numpy(sal_np).to(SAL.device)
 
-        # Reshape SAL tensor to match the original shape
-        SAL = sal_torch.view(B, W, H)
+        # # Reshape SAL tensor to match the original shape
+        # SAL = sal_torch.view(B, W, H)
 
         
         return SAL, groups
