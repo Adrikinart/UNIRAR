@@ -58,9 +58,6 @@ def run_model(args, model,file_opener,img_dir, DEFAULT_DEVICE):
             file = img_dir, 
         )
 
-        print(args.model)
-        print(tensor_image.shape)
-        
         tensor_image = tensor_image.to(DEFAULT_DEVICE)
         saliency, saliency_time, layers = model(tensor_image)
         layers= layers

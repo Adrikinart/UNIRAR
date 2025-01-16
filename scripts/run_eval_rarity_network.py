@@ -63,7 +63,7 @@ def run_dataset_PO3(args,name,directory ,saliency_model, rarity_model, layers_in
         }
 
         maps['saliency_Add']= rarity_model.add_rarity(saliency, rarity_map)
-        maps['saliency_Sub']= rarity_model.sub_rarity(saliency, rarity_map)
+        # maps['saliency_Sub']= rarity_model.sub_rarity(saliency, rarity_map)
         maps['saliency_Prod']= rarity_model.prod_rarity(saliency, rarity_map)
         maps['saliency_Itti']= rarity_model.fuse_rarity(saliency, rarity_map)
 
@@ -162,7 +162,7 @@ def run_dataset_salicon(args, saliency_model, rarity_model, layers_index, file_o
 
         maps['saliency_Add']= rarity_model.add_rarity(saliency.clone(), rarity_map.clone())
         # maps['saliency_Sub']= rarity_model.sub_rarity(saliency.clone(), rarity_map.clone())
-        # maps['saliency_Prod']= rarity_model.prod_rarity(saliency.clone(), rarity_map.clone())
+        maps['saliency_Prod']= rarity_model.prod_rarity(saliency.clone(), rarity_map.clone())
         maps['saliency_Itti']= rarity_model.fuse_rarity(saliency.clone(), rarity_map.clone())
 
         # Normalize fix and sal between 0 and 1
@@ -272,7 +272,7 @@ def run_dataset_mit1003(args, saliency_model, rarity_model, layers_index, file_o
 
         maps['saliency_Add']= rarity_model.add_rarity(saliency.clone(), rarity_map.clone())
         # maps['saliency_Sub']= rarity_model.sub_rarity(saliency.clone(), rarity_map.clone())
-        # maps['saliency_Prod']= rarity_model.prod_rarity(saliency.clone(), rarity_map.clone())
+        maps['saliency_Prod']= rarity_model.prod_rarity(saliency.clone(), rarity_map.clone())
         maps['saliency_Itti']= rarity_model.fuse_rarity(saliency.clone(), rarity_map.clone())
 
         # Normalize fix and sal between 0 and 1
@@ -433,13 +433,13 @@ if __name__ == "__main__":
     print("DEFAULT_DEVICE " ,DEFAULT_DEVICE)
 
     #  run dataset test
-    run_dataset_salicon(
-        saliency_model= model,
-        rarity_model= rarity_model,
-        file_opener= file_opener,
-        layers_index= layers_index,
-        args= args,
-    )
+    # run_dataset_salicon(
+    #     saliency_model= model,
+    #     rarity_model= rarity_model,
+    #     file_opener= file_opener,
+    #     layers_index= layers_index,
+    #     args= args,
+    # )
 
     #  run dataset test
     run_dataset_mit1003(
@@ -451,45 +451,45 @@ if __name__ == "__main__":
     )
 
     #  run dataset test
-    # run_dataset_PO3(
-    #     saliency_model= model,
-    #     directory= args.P3 + "colors/images/",
-    #     name= "p3_colors",
-    #     rarity_model= rarity_model,
-    #     file_opener= file_opener,
-    #     layers_index= layers_index,
-    #     args= args,
-    # )
+    run_dataset_PO3(
+        saliency_model= model,
+        directory= args.P3 + "colors/images/",
+        name= "p3_colors",
+        rarity_model= rarity_model,
+        file_opener= file_opener,
+        layers_index= layers_index,
+        args= args,
+    )
 
-    # #  run dataset test
-    # run_dataset_PO3(
-    #     saliency_model= model,
-    #     directory= args.P3 + "sizes/images/",
-    #     name= "p3_sizes",
-    #     rarity_model= rarity_model,
-    #     file_opener= file_opener,
-    #     layers_index= layers_index,
-    #     args= args,
-    # )
+    #  run dataset test
+    run_dataset_PO3(
+        saliency_model= model,
+        directory= args.P3 + "sizes/images/",
+        name= "p3_sizes",
+        rarity_model= rarity_model,
+        file_opener= file_opener,
+        layers_index= layers_index,
+        args= args,
+    )
 
-    # #  run dataset test
-    # run_dataset_PO3(
-    #     saliency_model= model,
-    #     directory= args.P3 + "orientations/images/",
-    #     name= "p3_orientations",
-    #     rarity_model= rarity_model,
-    #     file_opener= file_opener,
-    #     layers_index= layers_index,
-    #     args= args,
-    # )
+    #  run dataset test
+    run_dataset_PO3(
+        saliency_model= model,
+        directory= args.P3 + "orientations/images/",
+        name= "p3_orientations",
+        rarity_model= rarity_model,
+        file_opener= file_opener,
+        layers_index= layers_index,
+        args= args,
+    )
 
-    # #  run dataset test
-    # run_dataset_PO3(
-    #     saliency_model= model,
-    #     directory= args.O3 + "/images/",
-    #     name= "o3",
-    #     rarity_model= rarity_model,
-    #     file_opener= file_opener,
-    #     layers_index= layers_index,
-    #     args= args,
-    # )
+    #  run dataset test
+    run_dataset_PO3(
+        saliency_model= model,
+        directory= args.O3 + "/images/",
+        name= "o3",
+        rarity_model= rarity_model,
+        file_opener= file_opener,
+        layers_index= layers_index,
+        args= args,
+    )
