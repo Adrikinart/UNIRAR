@@ -4,7 +4,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-test/outputs/*
+scripts/outputs/*
+model/TranSalNet/pretrained_models/
+model/TempSal/weights/
+
 
 # C extensions
 *.so
