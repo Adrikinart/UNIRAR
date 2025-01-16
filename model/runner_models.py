@@ -53,6 +53,18 @@ def run_model(args, model,file_opener,img_dir, DEFAULT_DEVICE):
             new_layers.append(layer)
         layers= new_layers
 
+    if args.model == "TempSal":
+        tensor_image = file_opener.open_image(
+            file = img_dir, 
+        )
+
+        print(args.model)
+        print(tensor_image.shape)
+        
+        tensor_image = tensor_image.to(DEFAULT_DEVICE)
+        saliency, saliency_time, layers = model(tensor_image)
+        layers= layers
+
     # print(f"Processing {args.model}: {time.time() - start_time:.2f} seconds")
 
     return saliency, layers

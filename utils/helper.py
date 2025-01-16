@@ -43,7 +43,7 @@ def show_saliency(img, maps= {}, details= None):
             colors_details.append(detail_color)
             colors_details_images.append(detail_color_img)
 
-    plt.figure(figsize=(10,10))
+    plt.figure(figsize=(24,18))
 
     rows =  2
     cols = max(len(saliency_colors) , len(colors_details))

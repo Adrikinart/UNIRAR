@@ -2,6 +2,8 @@
 import os
 from . import unisal_file_opener
 from . import transal_file_opener
+from . import tempsal_file_opener
+
 
 
 def load_dataloader(args):
@@ -14,4 +16,6 @@ def load_dataloader(args):
         file_opener = transal_file_opener
     elif args.model == "TranSalNetRes":
         file_opener = transal_file_opener
+    elif args.model == "TempSal":
+        file_opener = tempsal_file_opener
     return file_opener

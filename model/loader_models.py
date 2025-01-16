@@ -2,6 +2,7 @@ import os
 from . import Unisal
 from . import TranSalNetDense
 from . import TranSalNetRes
+from . import TempSal
 
 import torch
 
@@ -50,9 +51,30 @@ def load_model(args , DEFAULT_DEVICE):
             # [4,5],
             [6],
             [7],
-            [8],
-            # [9]
+            # [8],
             
         ]
+
+    elif args.model == "TempSal":
+        
+        model_checkpoint_path= "./weights/multilevel_tempsal.pt"
+        model = TempSal(
+            device=DEFAULT_DEVICE,
+            model_path=model_checkpoint_path,
+            model_vol_path= model_checkpoint_path,
+            time_slices=5,
+            train_model=0
+        )
+
+        layers_index=[
+            [1],
+            [2],
+            [3],
+            [4],
+            [5]
+        ]
+
+
+
 
     return model, layers_index

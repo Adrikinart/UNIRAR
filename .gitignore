@@ -6,6 +6,8 @@ __pycache__/
 
 scripts/outputs/*
 model/TranSalNet/pretrained_models/
+model/TempSal/weights/
+
 
 # C extensions
 *.so
