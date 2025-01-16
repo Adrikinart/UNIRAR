@@ -368,7 +368,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path", 
         type=str, 
-        default="../results2/",
+        default="../results/",
         help="path to save results"
     )
 
