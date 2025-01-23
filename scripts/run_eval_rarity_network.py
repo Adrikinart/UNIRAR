@@ -20,7 +20,7 @@ from model import load_model, load_dataloader, run_model
 if torch.cuda.is_available():
     DEFAULT_DEVICE = torch.device("cuda:0")
 elif torch.backends.mps.is_available():
-    DEFAULT_DEVICE = torch.device("mps")
+    DEFAULT_DEVICE = torch.device("cpu")
 else:
     DEFAULT_DEVICE = torch.device("cpu")
 
@@ -262,6 +262,12 @@ def run_dataset_mit1003(args, saliency_model, rarity_model, layers_index, file_o
 
         start_time = time.time()
 
+        data = {
+            "filename": filename,
+            'path' : args.mit1003 + "images",
+            'metrics' : {},
+        }
+
         # create and save maps
         maps = {
             'Fixation' : torch.tensor(fix).unsqueeze(0).float().to(DEFAULT_DEVICE),
@@ -280,14 +286,6 @@ def run_dataset_mit1003(args, saliency_model, rarity_model, layers_index, file_o
         sal = cv2.normalize(sal, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
 
 
-        data = {
-            "filename": filename,
-            'path' : args.mit1003 + "images",
-            'metrics' : 
-            {
-            }
-        }
-
         for key, v in maps.items():
             if key == "Fixation":
                 continue
@@ -299,14 +297,21 @@ def run_dataset_mit1003(args, saliency_model, rarity_model, layers_index, file_o
                 'KLD': float(round(metrics.KLdiv(map_.copy(), fix.copy()), 4)),
                 'SIM': float(round(metrics.SIM(map_.copy(), sal.copy()), 4)),
                 # 'AUC-J': round(metrics.AUC_Judd(map_, fix), 2),
+                'statistics' : {
+                    'mean': float(round(np.mean(map_), 4)),
+                    'std': float(round(np.std(map_), 4)),
+                    'min': float(round(np.min(map_), 4)),
+                    'max': float(round(np.max(map_), 4)),
+                    'median': float(round(np.median(map_), 4)),
+                    'variance': float(round(np.var(map_), 4)),
+                },
             }
+
         process_time2 = time.time() - start_time
         # print(f"Time to compute model: {process_time:.4f}s")
         # print(f"Time to compute metrics: {process_time2:.4f}s")
-        
 
         results.append(data)
-
         process_time_global = time.time() - start_time_global
 
         total = len(files)
@@ -330,9 +335,8 @@ def run_dataset_mit1003(args, saliency_model, rarity_model, layers_index, file_o
                 details= groups
             )
             plt.show()
-
-
             # Save results as JSON file
+            
     print()
     results_path = os.path.join(args.path, f"mit1003_results.json")
     with open(results_path, 'w') as f:
@@ -368,35 +372,39 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path", 
         type=str, 
-        default="../results/",
+        default="../results2/",
         help="path to save results"
     )
 
     parser.add_argument(
         "--mit1003", 
         type=str, 
-        default="C:/Users/lelon/Documents/Dataset/MIT1003/images/",
+        # default="C:/Users/lelon/Documents/Dataset/MIT1003/images/",
+        default="/Users/coconut/Documents/Dataset/Saliency/MIT1003/images/",
         help="path directory images"
     )
 
     parser.add_argument(
         "--salicon", 
         type=str, 
-        default="C:/Users/lelon/Documents/Dataset/salicon/images/val/",
+        # default="C:/Users/lelon/Documents/Dataset/salicon/images/val/",
+        default="/Users/coconut/Documents/Dataset/Saliency/SALICON/images/val/",
         help="path directory images"
     )
 
     parser.add_argument(
         "--P3", 
         type=str, 
-        default="C:/Users/lelon/Documents/Dataset/P3_Data/",
+        # default="C:/Users/lelon/Documents/Dataset/P3_Data/",
+        default="/Users/coconut/Documents/Dataset/Saliency/P3_Data/",
         help="path directory images"
     )
 
     parser.add_argument(
         "--O3", 
         type=str, 
-        default="C:/Users/lelon/Documents/Dataset/O3_Data/",
+        # default="C:/Users/lelon/Documents/Dataset/O3_Data/",
+        default="/Users/coconut/Documents/Dataset/Saliency/O3_Data/",
         help="path directory images"
     )
 
@@ -450,46 +458,46 @@ if __name__ == "__main__":
         args= args,
     )
 
-    #  run dataset test
-    run_dataset_PO3(
-        saliency_model= model,
-        directory= args.P3 + "colors/images/",
-        name= "p3_colors",
-        rarity_model= rarity_model,
-        file_opener= file_opener,
-        layers_index= layers_index,
-        args= args,
-    )
+    # #  run dataset test
+    # run_dataset_PO3(
+    #     saliency_model= model,
+    #     directory= args.P3 + "colors/images/",
+    #     name= "p3_colors",
+    #     rarity_model= rarity_model,
+    #     file_opener= file_opener,
+    #     layers_index= layers_index,
+    #     args= args,
+    # )
 
-    #  run dataset test
-    run_dataset_PO3(
-        saliency_model= model,
-        directory= args.P3 + "sizes/images/",
-        name= "p3_sizes",
-        rarity_model= rarity_model,
-        file_opener= file_opener,
-        layers_index= layers_index,
-        args= args,
-    )
+    # #  run dataset test
+    # run_dataset_PO3(
+    #     saliency_model= model,
+    #     directory= args.P3 + "sizes/images/",
+    #     name= "p3_sizes",
+    #     rarity_model= rarity_model,
+    #     file_opener= file_opener,
+    #     layers_index= layers_index,
+    #     args= args,
+    # )
 
-    #  run dataset test
-    run_dataset_PO3(
-        saliency_model= model,
-        directory= args.P3 + "orientations/images/",
-        name= "p3_orientations",
-        rarity_model= rarity_model,
-        file_opener= file_opener,
-        layers_index= layers_index,
-        args= args,
-    )
+    # #  run dataset test
+    # run_dataset_PO3(
+    #     saliency_model= model,
+    #     directory= args.P3 + "orientations/images/",
+    #     name= "p3_orientations",
+    #     rarity_model= rarity_model,
+    #     file_opener= file_opener,
+    #     layers_index= layers_index,
+    #     args= args,
+    # )
 
-    #  run dataset test
-    run_dataset_PO3(
-        saliency_model= model,
-        directory= args.O3 + "/images/",
-        name= "o3",
-        rarity_model= rarity_model,
-        file_opener= file_opener,
-        layers_index= layers_index,
-        args= args,
-    )
+    # #  run dataset test
+    # run_dataset_PO3(
+    #     saliency_model= model,
+    #     directory= args.O3 + "/images/",
+    #     name= "o3",
+    #     rarity_model= rarity_model,
+    #     file_opener= file_opener,
+    #     layers_index= layers_index,
+    #     args= args,
+    # )

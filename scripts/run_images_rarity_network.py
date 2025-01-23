@@ -121,7 +121,7 @@ if __name__ == "__main__":
         type=str, 
         default="Unisal", 
         help="select model",
-        choices= ["Unisal", "TranSalNetDense" , "TranSalNetRes"]
+        choices= ["Unisal", "TranSalNetDense" , "TranSalNetRes" , "TempSal"]
     )
 
     parser.add_argument(
@@ -136,8 +136,8 @@ if __name__ == "__main__":
         "--directory", 
         type=str, 
         # default="/Users/coconut/Documents/Dataset/Saliency/SALICON/test/",
-        default="C:/Users/lelon/Documents/Dataset/Salicon/test/",
-        # default="./inputs/images/",
+        # default="C:/Users/lelon/Documents/Dataset/Salicon/test/",
+        default="./inputs/images/",
         help="path directory images"
     )
 

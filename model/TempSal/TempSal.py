@@ -19,7 +19,7 @@ class PNASModel(nn.Module):
         super(PNASModel, self).__init__()
         self.pnas = NetworkImageNet(216, 1001, 12, False, PNASNet)
         if load_weight:
-            self.pnas.load_state_dict(torch.load(self.path))
+            self.pnas.load_state_dict(torch.load(self.path, map_location='cpu'))
 
         for param in self.pnas.parameters():
             param.requires_grad = train_enc
@@ -110,7 +110,7 @@ class PNASVolModellast(nn.Module):
 
             self.pnas = NetworkImageNet(216, 1001, 12, False, PNASNet)
             if load_weight:            
-                state_dict = torch.load(self.path)
+                state_dict = torch.load(self.path, map_location='cpu')
                 new_state_dict = OrderedDict()
                 for k, v in state_dict.items():
                     if 'module'  in k:
@@ -244,10 +244,13 @@ class PNASBoostedModelMultiLevel(nn.Module):
             nn.Sigmoid()
         )
         model_vol = PNASVolModellast(time_slices=5, load_weight=0) #change this to time slices
-        model_vol = nn.DataParallel(model_vol).cuda()
+        # model_vol = nn.DataParallel(model_vol).cuda()
+        model_vol = nn.DataParallel(model_vol)
+
+        
 
         model_path = model_path.replace('./', '../model/TempSal/') # update path
-        state_dict = torch.load(model_path)
+        state_dict = torch.load(model_path , map_location='cpu')
         vol_state_dict = OrderedDict()
         sal_state_dict = OrderedDict()
         smm_state_dict = OrderedDict()
@@ -265,14 +268,18 @@ class PNASBoostedModelMultiLevel(nn.Module):
                 
         self.load_state_dict(smm_state_dict)
         model_vol.load_state_dict(vol_state_dict)
-        self.pnas_vol = nn.DataParallel(model_vol).cuda()
+        # self.pnas_vol = nn.DataParallel(model_vol).cuda()
+        self.pnas_vol = nn.DataParallel(model_vol)
+
 
         for param in self.pnas_vol.parameters():
             param.requires_grad = False
 
 
         model = PNASModel(load_weight=0)
-        model = nn.DataParallel(model).cuda()
+        # model = nn.DataParallel(model).cuda()
+        model = nn.DataParallel(model)
+
 
         model.load_state_dict(sal_state_dict, strict=True)
         self.pnas_sal = nn.DataParallel(model).to(device)
