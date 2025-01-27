@@ -1,8 +1,11 @@
 
-
+import math
 import torch
 from torch import nn
+import cv2
+import numpy as np
 import torch.nn.functional as F
+
 
 
 class RarityNetwork(nn.Module):
@@ -159,7 +162,7 @@ class RarityNetwork(nn.Module):
 
     def rarity_tensor(self, channel):
         B,C , a , b = channel.shape
-        if a > 10:  # manage margins for high-level features
+        if a > 16:  # manage margins for high-level features
             channel[:,:,0:1, :] = 0
             channel[:,:,:, a - 1:a] = 0
             channel[:,:,:, 0:1] = 0
@@ -181,7 +184,7 @@ class RarityNetwork(nn.Module):
         channel = (channel - tensor_min) / (tensor_max - tensor_min + 1e-8)
         channel = channel * 256
 
-        bins = 11
+        bins = 8
 
         min_val, max_val = channel.min(), channel.max()
         bin_edges = torch.linspace(min_val, max_val, steps=bins + 1, device=channel.device)
@@ -221,8 +224,13 @@ class RarityNetwork(nn.Module):
         dst = (dst - tensor_min) / (tensor_max - tensor_min + 1e-8)
         dst = dst.view(B,C, a,b)
 
+        if a > 18:
+            dst[:,:,0:1, :] = 0
+            dst[:,:,:, a - 1:a] = 0
+            dst[:,:,:, 0:1] = 0
+            dst[:,:,b - 1:b, :] = 0
 
-        if a > 28:
+        elif a > 28:
             dst[:,:,0:2, :] = 0
             dst[:,:,:, a - 2:a] = 0
             dst[:,:,:, 0:2] = 0
@@ -300,7 +308,7 @@ class RarityNetwork(nn.Module):
             assert layer.ndim == 4, "Each layer in layer_output must have the same dimensions B, C, W, H"
 
         # for i,layer in enumerate(layers_input):
-        #     print(f"Layer {i+1}: ",layer.shape)
+            # print(f"Layer {i+1}: ",layer.shape)
 
         groups = []
         for layer_index in layers_index:
@@ -329,6 +337,21 @@ class RarityNetwork(nn.Module):
 
         SAL= SAL.view(B,W,H)
 
+        # # Convert SAL to numpy array
+        # sal_np = SAL.detach().cpu().numpy()
+
+        # # Apply cv2 erode and dilatation
+        # kernel = np.ones((5, 5), np.uint8)
+        # sal_np = cv2.erode(sal_np, kernel, iterations=3)
+        # sal_np = cv2.dilate(sal_np, kernel, iterations=1)
+
+        # # Convert back to torch tensor
+        # sal_torch = torch.from_numpy(sal_np).to(SAL.device)
+
+        # # Reshape SAL tensor to match the original shape
+        # SAL = sal_torch.view(B, W, H)
+
+        
         return SAL, groups
 
 
